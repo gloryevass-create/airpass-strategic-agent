@@ -182,15 +182,22 @@
   border: 1px solid var(--color-divider); border-radius: 0;
 }
 /* input[type=date]가 select보다 몇 px 더 크게 그려지던 문제(2026-09-13, To-Do
-   알람 날짜 vs 시각 select 나란히 두고 실측 확인) — 원인은 min-height 부족이
-   아니라 Chrome이 ::-webkit-calendar-picker-indicator(달력 아이콘)에 기본으로
-   주는 padding이었다. .input 전체에 고정 height를 줘서 맞추려 했더니 이번엔
-   select 글자가 잘렸다(다른 화면 실측 확인) — select/date 내부 텍스트는
-   .btn과 달리 flex 정렬이 안 먹어서, 박스를 텍스트가 필요로 하는 높이보다
-   작게 고정하면 그대로 잘린다. 그래서 height는 다시 빼고(min-height만 유지),
-   아이콘 쪽 padding만 줄여 date input의 실제 필요 높이를 select와 맞춘다. */
-.industry-theme input[type="date"].input::-webkit-calendar-picker-indicator,
-.industry-theme input[type="time"].input::-webkit-calendar-picker-indicator {
+   알람 날짜 vs 시각 select 나란히 두고 실측 확인) — Chrome은 date input 내부의
+   연/월/일 필드 묶음(::-webkit-datetime-edit-fields-wrapper)을 select보다
+   원래 더 큰 최소 높이로 그린다. 처음엔 .input 전체에 고정 height를 줘서
+   맞추려 했으나 select는 텍스트가 .btn처럼 flex로 정렬되지 않아 그 높이가
+   실제 필요한 텍스트 높이보다 작으면 글자가 잘렸다(사용자 실측 확인). 이어서
+   달력 아이콘 padding만 줄여봤지만 실측 결과 눈에 띄는 차이가 없었다(아이콘이
+   원인의 전부가 아니었음). 그래서 select는 그대로 두고 input[type=date]에만
+   `display:flex; align-items:center`를 줘서 내부 콘텐츠를 세로 중앙 정렬한 뒤
+   select와 같은 고정 height를 줬다 — flex 정렬 덕분에 높이를 select 수준으로
+   낮춰도 텍스트가 위/아래로 잘리지 않고 중앙에 그대로 보인다. */
+.industry-theme input[type="date"].input {
+  display: flex;
+  align-items: center;
+  height: 29px;
+}
+.industry-theme input[type="date"].input::-webkit-calendar-picker-indicator {
   padding: 0;
   margin-left: 4px;
 }
