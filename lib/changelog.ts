@@ -17,6 +17,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "To-Do 체크박스 완료 처리가 느리게 반응하던 문제 수정 — 서버 응답을 기다리지 않고 클릭 즉시 화면에 반영하는 낙관적 업데이트 적용(SI Business 등 즐겨찾기와 동일한 패턴)",
       "To-Do 알람 시각 입력의 분 선택 단위를 5분으로 조정 — 브라우저 네이티브 시각 선택 드롭다운이 step 속성과 무관하게 계속 1분 단위로 나오는 걸 확인해, 분 선택을 직접 만든 5분 단위 select로 교체",
       "긴급 수정: input[type=date]에 준 display:flex가 모바일 Safari에서 날짜 필드 자체가 안 보이는 회귀를 일으켜 즉시 원복 — input[type=date] vs select 높이를 CSS로 완전히 맞추는 시도는 브라우저마다 네이티브 렌더링이 달라 포기(전체 화면 영향받는 공용 클래스라 안전한 쪽으로 되돌림)",
+      "To-Do 기한/알람 날짜 입력이 좁은 모바일 화면에서 옆 선택박스와 겹쳐 보이던 문제 수정 — flex item 기본 min-width 때문에 date input이 줄어들지 못하고 넘치던 것을 .field에 min-width:0으로 해결(Industry 테마 전체 공용 flex 행에 적용되는 안전한 일반 수정)",
     ],
   },
   {

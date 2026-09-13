@@ -172,6 +172,16 @@
   display: block; font-size: 12px; margin-bottom: 5px;
   color: color-mix(in srgb, var(--color-text) 70%, transparent);
 }
+/* flex 행 안에서 .field가 flex item으로 쓰일 때(예: "기한"+"우선순위"를
+   나란히 두는 `flex: "1 1 160px"` 패턴) 기본값인 min-width: auto 때문에
+   내용물(특히 input[type=date])의 고유 최소 너비가 flex-basis보다 크면
+   줄어들지 못하고 옆 칸을 침범해 겹쳐 보인다(2026-09-14, To-Do 알람 날짜 vs
+   시각 select가 모바일 좁은 화면에서 겹쳐 보이던 문제로 확인) — min-width: 0
+   으로 항상 필요한 만큼 줄어들 수 있게 한다(내용이 이미 다 들어가는
+   화면에서는 아무 영향 없음). */
+.industry-theme .field {
+  min-width: 0;
+}
 .industry-theme .input {
   /* .btn과 높이를 맞춘다(2026-09-07 최초 매칭, 2026-09-08 .btn 세로 패딩 축소에
      맞춰 여기도 같이 줄임) — industryTheme.css를 쓰는 모든 화면(제품 카탈로그·
