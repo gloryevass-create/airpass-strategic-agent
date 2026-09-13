@@ -117,6 +117,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      personal_api_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          label: string | null;
+          token_hash: string;
+          token_preview: string;
+          created_at: string;
+          last_used_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          label?: string | null;
+          token_hash: string;
+          token_preview: string;
+          created_at?: string;
+          last_used_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          label?: string | null;
+          token_hash?: string;
+          token_preview?: string;
+          created_at?: string;
+          last_used_at?: string | null;
+        };
+        Relationships: [];
+      };
       google_drive_upload_connection: {
         Row: {
           id: boolean;

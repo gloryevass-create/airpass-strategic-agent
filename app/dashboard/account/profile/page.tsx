@@ -3,12 +3,16 @@ import Link from "next/link";
 import { requireAuthedClient } from "@/lib/supabase/authed";
 import { ProfileForm } from "@/components/ProfileForm";
 import { getMySmtpAccountUser } from "@/lib/queries/smtpAccount";
+import { getMyApiTokens } from "@/lib/queries/apiTokens";
+import { resolveBaseUrl } from "@/app/dashboard/actions/materialEmail";
 
 export default async function ProfilePage() {
   const { supabase, user } = await requireAuthedClient();
-  const [{ data: profile }, smtpUser] = await Promise.all([
+  const [{ data: profile }, smtpUser, apiTokens, baseUrl] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
     getMySmtpAccountUser(supabase, user.id),
+    getMyApiTokens(supabase, user.id),
+    resolveBaseUrl(),
   ]);
 
   return (
@@ -49,6 +53,8 @@ export default async function ProfilePage() {
           fontPreference={profile?.font_preference ?? "pretendard"}
           sidebarFontPreference={profile?.sidebar_font_preference ?? "pretendard"}
           smtpUser={smtpUser}
+          apiTokens={apiTokens}
+          baseUrl={baseUrl}
         />
       </div>
     </div>

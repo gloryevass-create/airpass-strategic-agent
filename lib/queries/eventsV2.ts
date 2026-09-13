@@ -40,7 +40,17 @@ export function eventsV2RangeForMonth(month: string): { rangeStart: string; rang
  */
 export async function getTeamEventsV2(supabase: Client, month: string): Promise<TeamEventV2[]> {
   const { rangeStart, rangeEnd } = eventsV2RangeForMonth(month);
+  return getTeamEventsV2InRange(supabase, rangeStart, rangeEnd);
+}
 
+/** month 그리드가 아니라 임의의 [rangeStart, rangeEnd) 구간으로 조회할 때 쓴다
+ * (외부 캘린더 브리핑 API, app/api/calendar-feed/route.ts) — 필터링 로직은
+ * getTeamEventsV2와 동일, 범위만 호출부가 직접 정한다. */
+export async function getTeamEventsV2InRange(
+  supabase: Client,
+  rangeStart: string,
+  rangeEnd: string
+): Promise<TeamEventV2[]> {
   const { data } = await supabase
     .from("team_events_v2")
     .select("*")

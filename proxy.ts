@@ -18,6 +18,10 @@ const PUBLIC_PATHS = [
   // 수신 엔드포인트 — 위와 같은 이유로 세션 체크를 건너뛴다(AI_REVIEW_INGEST_SECRET
   // 검증이 진짜 인증, app/api/ai-review/ingest/route.ts, 2026-09-06).
   "/api/ai-review/ingest",
+  // 개인 API 토큰(Bearer)으로 인증하는 외부 캘린더 브리핑 API — 위와 같은 이유로
+  // 세션 체크를 건너뛴다(라우트 자체의 토큰 검증이 진짜 인증,
+  // app/api/calendar-feed/route.ts, 2026-09-13).
+  "/api/calendar-feed",
 ];
 
 function isPublicPath(pathname: string) {

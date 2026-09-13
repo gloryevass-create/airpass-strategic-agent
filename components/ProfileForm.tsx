@@ -7,10 +7,13 @@ import {
   deleteMaterialEmailSmtpAccount,
   type SmtpAccountState,
 } from "@/app/dashboard/actions/smtpAccount";
+import { createApiToken, deleteApiToken, type ApiTokenState } from "@/app/dashboard/actions/apiTokens";
+import type { PersonalApiToken } from "@/lib/queries/apiTokens";
 import { FONT_OPTIONS, PRETENDARD_DEFAULT_STACK, type FontPreferenceId } from "@/lib/fontPreferences";
 
 const initialState: UpdateProfileState = undefined;
 const initialSmtpState: SmtpAccountState = undefined;
+const initialApiTokenState: ApiTokenState = undefined;
 
 const PREVIEW_TEXT = "가나다 ABC 123 — 실제 이 폰트로 보입니다";
 
@@ -99,6 +102,127 @@ function SmtpAccountSection({ smtpUser }: { smtpUser: string | null }) {
   );
 }
 
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** 외부 캘린더 브리핑 API(app/api/calendar-feed/route.ts) 개인 토큰 발급/삭제
+ * (2026-09-13) — Claude 등 외부 에이전트가 이 토큰으로 본인 일정(개인 구글
+ * 캘린더 + 팀 캘린더)을 읽어갈 수 있다. 평문 토큰은 발급 직후 이 화면에서
+ * 딱 한 번만 보여주고(state.token), 이후로는 목록에 미리보기(preview)만
+ * 남는다 — 다시 볼 수 없으니 그 자리에서 복사해야 한다. */
+function ApiTokenSection({ tokens, baseUrl }: { tokens: PersonalApiToken[]; baseUrl: string }) {
+  const [state, formAction, pending] = useActionState(createApiToken, initialApiTokenState);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [, startDelete] = useTransition();
+
+  function handleDelete(id: string) {
+    if (!window.confirm("이 토큰을 삭제할까요? 이 토큰을 쓰던 외부 연결은 더 이상 동작하지 않습니다.")) return;
+    setDeletingId(id);
+    startDelete(async () => {
+      await deleteApiToken(id);
+      setDeletingId(null);
+    });
+  }
+
+  const feedUrl = `${baseUrl}/api/calendar-feed`;
+
+  return (
+    <div style={{ marginTop: "var(--space-8)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--color-divider)" }}>
+      <h2 style={{ fontFamily: "var(--font-heading)", fontSize: 16, margin: "0 0 var(--space-2)" }}>외부 연동 API 토큰</h2>
+      <p className="text-muted" style={{ fontSize: 12, margin: "0 0 var(--space-4)" }}>
+        Claude나 다른 외부 에이전트가 본인 일정(개인 구글 캘린더 + 팀 캘린더)을 읽어가 일정
+        브리핑 등에 쓸 수 있게, 토큰을 발급해 아래 API에 Authorization 헤더로 실어 호출하도록
+        연결하세요. 토큰은 발급 직후에만 전체 값을 볼 수 있습니다.
+      </p>
+
+      {tokens.length > 0 && (
+        <ul style={{ listStyle: "none", margin: "0 0 var(--space-4)", padding: 0, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          {tokens.map((t) => (
+            <li
+              key={t.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "var(--space-3)",
+                padding: "var(--space-2) var(--space-3)",
+                border: "1px solid var(--color-divider)",
+                borderRadius: "var(--radius-sm, 6px)",
+                fontSize: 13,
+              }}
+            >
+              <div>
+                <div style={{ fontFamily: "monospace" }}>{t.tokenPreview}</div>
+                <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                  {t.label ? `${t.label} · ` : ""}발급 {formatDateTime(t.createdAt)}
+                  {t.lastUsedAt ? ` · 마지막 사용 ${formatDateTime(t.lastUsedAt)}` : " · 아직 사용 안 함"}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => handleDelete(t.id)}
+                disabled={deletingId === t.id}
+              >
+                {deletingId === t.id ? "삭제 중..." : "삭제"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form action={formAction} style={{ display: "flex", gap: "var(--space-2)", maxWidth: 480 }}>
+        <input className="input" name="label" placeholder="용도(선택, 예: 일정 브리핑용)" style={{ flex: 1 }} />
+        <button type="submit" className="btn btn-primary" disabled={pending}>
+          {pending ? "발급 중..." : "새 토큰 발급"}
+        </button>
+      </form>
+
+      {state?.error && (
+        <p style={{ color: "var(--color-accent-900)", fontSize: 13, marginTop: "var(--space-3)" }}>{state.error}</p>
+      )}
+
+      {state?.token && (
+        <div
+          style={{
+            marginTop: "var(--space-4)",
+            padding: "var(--space-4)",
+            background: "var(--color-surface-muted, #f6f6f4)",
+            border: "1px solid var(--color-divider)",
+            borderRadius: "var(--radius-sm, 6px)",
+          }}
+        >
+          <p style={{ margin: "0 0 var(--space-2)", fontSize: 13, fontWeight: 600 }}>
+            토큰이 발급됐습니다 — 지금 복사해두세요, 다시 보여드리지 않습니다.
+          </p>
+          <code style={{ display: "block", fontSize: 13, wordBreak: "break-all", marginBottom: "var(--space-3)" }}>
+            {state.token}
+          </code>
+          <p className="text-muted" style={{ fontSize: 12, margin: "0 0 var(--space-1)" }}>
+            외부 에이전트가 아래처럼 호출하면 됩니다(기본 범위: 오늘부터 14일, <code>?days=30</code>
+            또는 <code>?start=2026-09-13&end=2026-09-30</code>로 조절 가능):
+          </p>
+          <pre
+            style={{
+              margin: 0,
+              padding: "var(--space-2) var(--space-3)",
+              background: "var(--color-surface, #fff)",
+              border: "1px solid var(--color-divider)",
+              borderRadius: "var(--radius-sm, 6px)",
+              fontSize: 12,
+              overflowX: "auto",
+              whiteSpace: "pre",
+            }}
+          >
+{`curl "${feedUrl}" \\\n  -H "Authorization: Bearer ${state.token}"`}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProfileForm({
   name,
   companyEmail,
@@ -108,6 +232,8 @@ export function ProfileForm({
   fontPreference,
   sidebarFontPreference,
   smtpUser,
+  apiTokens,
+  baseUrl,
 }: {
   name: string | null;
   companyEmail: string;
@@ -117,6 +243,8 @@ export function ProfileForm({
   fontPreference: FontPreferenceId;
   sidebarFontPreference: FontPreferenceId;
   smtpUser: string | null;
+  apiTokens: PersonalApiToken[];
+  baseUrl: string;
 }) {
   const [state, formAction, pending] = useActionState(updateOwnProfile, initialState);
   // 폰트 두 필드만 컨트롤드로 관리한다 — 저장 전 실시간 미리보기를 그리려면
@@ -202,6 +330,7 @@ export function ProfileForm({
       </div>
     </form>
     <SmtpAccountSection smtpUser={smtpUser} />
+    <ApiTokenSection tokens={apiTokens} baseUrl={baseUrl} />
     </>
   );
 }

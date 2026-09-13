@@ -440,6 +440,48 @@ URL 발급이 필요한데 그마저도 새 첨부는 거의 다 드라이브를
   `destination`(local/google/both)까지 함께 추출해 `createTeamEventV2`에
   그대로 넘긴다(언급 없으면 항상 local).
 
+## 외부 캘린더 브리핑 API
+
+`/dashboard/account/profile` 하단 "외부 연동 API 토큰"(2026-09-13) — Claude 등 외부
+에이전트가 로그인 세션 없이 팀원 본인의 일정(개인 구글 캘린더 + 팀 캘린더
+`team_events_v2`)을 읽어가 일정 브리핑 등에 쓸 수 있게 만든 공개 API. 사용자가
+"클로드가 내 캘린더를 읽어서 브리핑에 쓰게 연결하고 싶다"고 요청해 추가했다 —
+이미 있던 Claude.ai Google Calendar 커넥터로 개인 구글 캘린더 자체는 바로 읽을 수
+있었지만, 이 앱에서만 관리하는 `team_events_v2`(팀 공유 일정)는 그 커넥터가 접근할
+방법이 없어서 별도로 만들었다.
+
+- **토큰**: `personal_api_tokens`(0074) — `google_calendar_connections`(0050)/
+  `material_email_smtp_accounts`(0070)와 같은 이유로 admin(service_role) 없이
+  세션 클라이언트 + self-row RLS로 본인 토큰만 발급/삭제한다. 다만 토큰 값 자체는
+  그 두 테이블과 달리 평문 저장하지 않는다 — Authorization 헤더로 그대로
+  흘러들어오는 "알면 그 사람 행세를 할 수 있는" 값이라 유출 시 위험도가 더
+  크다고 판단해 sha256 해시(`token_hash`)만 저장하고, 평문은 발급 응답
+  (`createApiToken`의 반환값)에 딱 한 번만 담아 화면에 보여준다(`components/
+  ProfileForm.tsx::ApiTokenSection`) — 이후로는 DB에서도 복원 불가능, 목록에는
+  `token_preview`(앞 10자 + 마지막 4자)만 남는다.
+- **조회 API**: `GET /api/calendar-feed` (`app/api/calendar-feed/route.ts`) —
+  `Authorization: Bearer <토큰>` 헤더로 인증한다. 세션 쿠키가 없는 서버-투-서버
+  호출이라 `proxy.ts` PUBLIC_PATHS에 등록했고(다른 `/api/cron/*`·
+  `/api/ai-review/ingest`와 같은 이유), 라우트 자체의 토큰 해시 조회가 진짜
+  인증이다 — admin(service_role) 클라이언트로 `token_hash` 일치 행을 찾아
+  `user_id`를 알아낸다(RLS로는 이 조회 자체가 애초에 불가능하므로 admin
+  클라이언트가 유일한 방법).
+  - 응답은 그 사용자의 `personalGoogleCalendar.events`(연결 안 돼 있으면 빈
+    배열)와 `teamCalendar.events`(팀 전체 공유라 필터 없이 그대로) 두 목록을
+    원본 JSON으로 돌려준다 — **요약 문장은 서버가 만들지 않는다**(사용자 확인,
+    2026-09-13: 호출하는 Claude/외부 에이전트가 원본을 보고 알아서 브리핑
+    문장을 만들면 되고, 그러면 이 API는 Anthropic API 키 의존성 없이 순수
+    조회만 하면 된다).
+  - 조회 범위는 기본 오늘부터 14일이고, `?days=30`(최대 90) 또는
+    `?start=YYYY-MM-DD&end=YYYY-MM-DD`로 지정할 수 있다
+    (`lib/queries/eventsV2.ts::getTeamEventsV2InRange` — 기존 월 단위 조회
+    `getTeamEventsV2`에서 범위 계산만 분리한 함수, 필터링 로직은 동일).
+  - 개인 구글 캘린더 조회는 기존 `lib/queries/googleCalendar.ts::
+    getMyGoogleCalendarEvents`를 그대로 재사용한다 — admin 클라이언트를 넘겨도
+    RLS를 아예 우회하므로 `user_id` 필터만 명시하면 정확히 그 사용자 것만
+    조회된다(이 함수가 세션 클라이언트 전용으로 짜인 게 아니라 `SupabaseClient`
+    타입만 요구해서 그대로 호환).
+
 ## Memo Board
 
 `/dashboard/memos` — Claude Design "Industry" 테마 목업("게시판 디자인
