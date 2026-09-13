@@ -195,10 +195,12 @@
 .industry-theme input[type="date"].input {
   display: flex;
   align-items: center;
-  /* select는 min-height: 29px를 줘도 실제로는 30px로 계산된다(실측,
-     playwright+실제 Chrome으로 getBoundingClientRect 확인) — 29px로 맞추면
-     1px 차이가 남아 나란히 놓으면 여전히 어긋나 보인다. */
-  height: 30px;
+  /* select는 min-height: 29px를 줘도 실제로는 31px로 계산된다(실측,
+     Playwright+실제 Chrome — 주의: headless 모드는 30px로 나와 한 번 잘못
+     맞췄었다. headless Chrome은 네이티브 폼 컨트롤을 실제 창 모드와 다르게
+     렌더링할 수 있어(OS 위젯 테마 미적용 등) headless 측정값을 그대로
+     믿으면 안 된다 — 반드시 headless:false로 재검증할 것). */
+  height: 31px;
 }
 .industry-theme input[type="date"].input::-webkit-calendar-picker-indicator {
   padding: 0;
