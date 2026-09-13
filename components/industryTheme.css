@@ -195,7 +195,10 @@
 .industry-theme input[type="date"].input {
   display: flex;
   align-items: center;
-  height: 29px;
+  /* select는 min-height: 29px를 줘도 실제로는 30px로 계산된다(실측,
+     playwright+실제 Chrome으로 getBoundingClientRect 확인) — 29px로 맞추면
+     1px 차이가 남아 나란히 놓으면 여전히 어긋나 보인다. */
+  height: 30px;
 }
 .industry-theme input[type="date"].input::-webkit-calendar-picker-indicator {
   padding: 0;
