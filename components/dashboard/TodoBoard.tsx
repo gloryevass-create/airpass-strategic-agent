@@ -91,7 +91,17 @@ function TodoForm({ todo, onDone }: { todo: Todo | null; onDone: (saved: boolean
         </div>
         <div className="field">
           <label>알람 (선택)</label>
-          <input className="input" type="datetime-local" name="alarmAt" defaultValue={formatDateTimeLocal(todo?.alarmAt ?? null)} />
+          {/* step=300(5분)으로 지정해 브라우저 네이티브 datetime-local 피커의
+              분 선택 단위를 5분으로 맞춘다(2026-09-13, 1분 단위 스크롤이 번거롭다는
+              피드백) — 값 자체는 여전히 자유롭게 타이핑 입력 가능, 휠/화살표
+              조작만 5분 단위로 움직인다. */}
+          <input
+            className="input"
+            type="datetime-local"
+            name="alarmAt"
+            step={300}
+            defaultValue={formatDateTimeLocal(todo?.alarmAt ?? null)}
+          />
         </div>
         {state?.error && <p style={{ color: "var(--color-accent-900)", fontSize: 13 }}>{state.error}</p>}
         <div style={{ display: "flex", gap: "var(--space-2)" }}>
