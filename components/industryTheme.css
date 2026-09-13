@@ -175,36 +175,19 @@
 .industry-theme .input {
   /* .btn과 높이를 맞춘다(2026-09-07 최초 매칭, 2026-09-08 .btn 세로 패딩 축소에
      맞춰 여기도 같이 줄임) — industryTheme.css를 쓰는 모든 화면(제품 카탈로그·
-     산출내역·SI Business 등)이 이 클래스를 공유하므로 한 번 고치면 전체에 반영된다. */
+     산출내역·SI Business 등)이 이 클래스를 공유하므로 한 번 고치면 전체에 반영된다.
+     input[type=date]가 select보다 몇 px 더 크게 그려지는 문제(2026-09-13, To-Do
+     알람 날짜 vs 시각 select)를 여기서 CSS로 맞춰보려 했으나(고정 height, flex
+     정렬 등) 브라우저마다(Chrome 데스크톱/모바일 Safari) 네이티브 date input의
+     내부 렌더링이 달라 한쪽을 고치면 다른 쪽이 깨졌다(모바일 Safari에서
+     display:flex를 주니 날짜 필드 자체가 안 보이는 회귀 발생, 사용자 스크린샷
+     확인) — 그래서 CSS로 맞추는 시도는 접었다. To-Do의 날짜 입력 자체를
+     select 3개(연/월/일)로 바꿔 이 문제를 근본적으로 피한다
+     (components/dashboard/TodoBoard.tsx 참고). */
   width: 100%; min-height: 29px; padding: 5px 10px; font: inherit;
   font-size: 14px; line-height: 1.2; color: var(--color-text); caret-color: var(--color-accent);
   background: var(--color-surface);
   border: 1px solid var(--color-divider); border-radius: 0;
-}
-/* input[type=date]가 select보다 몇 px 더 크게 그려지던 문제(2026-09-13, To-Do
-   알람 날짜 vs 시각 select 나란히 두고 실측 확인) — Chrome은 date input 내부의
-   연/월/일 필드 묶음(::-webkit-datetime-edit-fields-wrapper)을 select보다
-   원래 더 큰 최소 높이로 그린다. 처음엔 .input 전체에 고정 height를 줘서
-   맞추려 했으나 select는 텍스트가 .btn처럼 flex로 정렬되지 않아 그 높이가
-   실제 필요한 텍스트 높이보다 작으면 글자가 잘렸다(사용자 실측 확인). 이어서
-   달력 아이콘 padding만 줄여봤지만 실측 결과 눈에 띄는 차이가 없었다(아이콘이
-   원인의 전부가 아니었음). 그래서 select는 그대로 두고 input[type=date]에만
-   `display:flex; align-items:center`를 줘서 내부 콘텐츠를 세로 중앙 정렬한 뒤
-   select와 같은 고정 height를 줬다 — flex 정렬 덕분에 높이를 select 수준으로
-   낮춰도 텍스트가 위/아래로 잘리지 않고 중앙에 그대로 보인다. */
-.industry-theme input[type="date"].input {
-  display: flex;
-  align-items: center;
-  /* select는 min-height: 29px를 줘도 실제로는 31px로 계산된다(실측,
-     Playwright+실제 Chrome — 주의: headless 모드는 30px로 나와 한 번 잘못
-     맞췄었다. headless Chrome은 네이티브 폼 컨트롤을 실제 창 모드와 다르게
-     렌더링할 수 있어(OS 위젯 테마 미적용 등) headless 측정값을 그대로
-     믿으면 안 된다 — 반드시 headless:false로 재검증할 것). */
-  height: 31px;
-}
-.industry-theme input[type="date"].input::-webkit-calendar-picker-indicator {
-  padding: 0;
-  margin-left: 4px;
 }
 .industry-theme .input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
 .industry-theme .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
