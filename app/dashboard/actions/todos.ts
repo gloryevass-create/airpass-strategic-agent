@@ -23,20 +23,22 @@ function parseLocalDateTime(raw: string): string | null {
   return d.toISOString();
 }
 
-// 알람을 date+time 두 개의 입력으로 나눠 받는다(2026-09-13) — 합친
-// datetime-local 하나로는 Chrome에서도 step 속성이 네이티브 피커의 분 단위
-// 제한에 반영되지 않는 한계가 있어(실측 확인), 독립된 time input(step이
-// 정상 반영됨)으로 분리했다(components/dashboard/TodoBoard.tsx). 여기서 다시
-// "YYYY-MM-DDTHH:mm" 형태로 합쳐 기존 parseLocalDateTime에 그대로 넘긴다.
+// 알람을 날짜 + 시(select) + 분(select) 세 입력으로 나눠 받는다(2026-09-13).
+// datetime-local 하나(심지어 독립된 time input으로 나눠도)로는 Chrome
+// 네이티브 시각 선택 드롭다운 자체가 여전히 1분 단위로 전부 나열돼(실측
+// 확인, step 속성이 이 드롭다운 목록 생성에는 반영 안 됨) 분 옵션을 직접
+// 5분 단위로만 제공하는 select로 바꿨다(components/dashboard/TodoBoard.tsx).
+// 여기서 "YYYY-MM-DDTHH:mm" 형태로 합쳐 기존 parseLocalDateTime에 넘긴다.
 function resolveAlarmAt(formData: FormData, dueDateRaw: string): { alarmAt: string | null; error?: string } {
   const alarmDateRaw = String(formData.get("alarmDate") ?? "").trim();
-  const alarmTimeRaw = String(formData.get("alarmTime") ?? "").trim();
+  const alarmHourRaw = String(formData.get("alarmHour") ?? "").trim();
+  const alarmMinuteRaw = String(formData.get("alarmMinute") ?? "").trim();
 
-  if (!alarmDateRaw && !alarmTimeRaw) return { alarmAt: null };
+  if (!alarmDateRaw && !alarmHourRaw && !alarmMinuteRaw) return { alarmAt: null };
   if (!alarmDateRaw) return { alarmAt: null, error: "알람 날짜를 입력하세요." };
-  if (!alarmTimeRaw) return { alarmAt: null, error: "알람 시각을 입력하세요." };
+  if (!alarmHourRaw || !alarmMinuteRaw) return { alarmAt: null, error: "알람 시각을 입력하세요." };
 
-  const alarmAt = parseLocalDateTime(`${alarmDateRaw}T${alarmTimeRaw}`);
+  const alarmAt = parseLocalDateTime(`${alarmDateRaw}T${alarmHourRaw}:${alarmMinuteRaw}`);
   if (!alarmAt) return { alarmAt: null, error: "알람 시각이 올바르지 않습니다." };
   if (new Date(alarmAt).getTime() <= Date.now()) {
     return { alarmAt: null, error: "알람은 현재보다 이후 시각으로만 설정할 수 있습니다." };

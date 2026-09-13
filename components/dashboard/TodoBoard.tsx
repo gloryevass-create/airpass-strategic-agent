@@ -17,12 +17,18 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
 }
 
-// 알람을 date+time 두 개의 별도 input으로 나눈다(2026-09-13) — 하나로 합친
-// datetime-local은 Chrome에서도 step 속성이 피커 휠(스피너)의 분 단위 제한에
-// 반영되지 않는 알려진 한계가 있다(실측 확인: step={300}을 줘도 1분 단위로
-// 계속 스크롤됨). 반면 독립된 time input은 step을 주면 Chrome이 그 간격으로
-// 값을 나열하는 드롭다운을 보여준다 — 그래서 date/time을 나눠 받고
-// 서버 액션(app/dashboard/actions/todos.ts)에서 다시 합친다.
+// 알람을 날짜 + 시(select) + 분(select) 세 입력으로 나눈다(2026-09-13).
+// 처음엔 datetime-local 하나에 step=300만 줬는데 Chrome 네이티브 피커
+// 스피너가 여전히 1분 단위로 움직였고(실측), date+time(type=time, step=300)
+// 두 개로 나눠봐도 Chrome이 시각 선택 드롭다운을 열면 그 목록 자체가 여전히
+// 1분 단위로 전부 나열됐다(실측, step은 형식 검증에만 쓰이고 이 드롭다운
+// 목록 생성에는 반영 안 됨) — 브라우저 네이티브 위젯으로는 못 미더워서,
+// 시/분을 아예 직접 만든 select로 바꿔 분 옵션 자체를 5분 단위로만
+// 제공한다. 서버 액션(app/dashboard/actions/todos.ts)에서 날짜+시+분을
+// 다시 합친다.
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
+const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
+
 function formatAlarmDatePart(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -30,11 +36,18 @@ function formatAlarmDatePart(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function formatAlarmTimePart(iso: string | null): string {
+function formatAlarmHourPart(iso: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return String(new Date(iso).getHours()).padStart(2, "0");
+}
+
+// 5분 단위 select에는 없는 값(예: 과거에 저장된 1분 단위 알람)이 올 수 있어
+// 가장 가까운 5분 단위로 반올림해서 보여준다 — 실제 저장값은 사용자가
+// 다시 저장을 눌러야 반올림된 값으로 갱신된다.
+function formatAlarmMinutePart(iso: string | null): string {
+  if (!iso) return "";
+  const rounded = (Math.round(new Date(iso).getMinutes() / 5) * 5) % 60;
+  return String(rounded).padStart(2, "0");
 }
 
 function NotificationSetupBanner() {
@@ -109,13 +122,24 @@ function TodoForm({ todo, onDone }: { todo: Todo | null; onDone: (saved: boolean
           </div>
           <div className="field" style={{ flex: "1 1 160px" }}>
             <label>알람 시각</label>
-            <input
-              className="input"
-              type="time"
-              name="alarmTime"
-              step={300}
-              defaultValue={formatAlarmTimePart(todo?.alarmAt ?? null)}
-            />
+            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <select className="input" name="alarmHour" defaultValue={formatAlarmHourPart(todo?.alarmAt ?? null)}>
+                <option value="">시</option>
+                {HOUR_OPTIONS.map((h) => (
+                  <option key={h} value={h}>
+                    {h}시
+                  </option>
+                ))}
+              </select>
+              <select className="input" name="alarmMinute" defaultValue={formatAlarmMinutePart(todo?.alarmAt ?? null)}>
+                <option value="">분</option>
+                {MINUTE_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}분
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
         {state?.error && <p style={{ color: "var(--color-accent-900)", fontSize: 13 }}>{state.error}</p>}
