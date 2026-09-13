@@ -175,17 +175,24 @@
 .industry-theme .input {
   /* .btn과 높이를 맞춘다(2026-09-07 최초 매칭, 2026-09-08 .btn 세로 패딩 축소에
      맞춰 여기도 같이 줄임) — industryTheme.css를 쓰는 모든 화면(제품 카탈로그·
-     산출내역·SI Business 등)이 이 클래스를 공유하므로 한 번 고치면 전체에 반영된다.
-     min-height뿐 아니라 height도 명시한다(2026-09-13) — input[type=date]는 내부
-     캘린더 아이콘/필드 구조 때문에 min-height만으로는 select보다 몇 px 더 크게
-     그려져(To-Do 알람 날짜 vs 시각 select 나란히 두고 실측 확인) 같은 줄에서
-     높이가 안 맞았다. height를 같이 주면 두 컨트롤이 정확히 같은 박스 높이로
-     맞춰진다(textarea.input의 min-height: 90px는 height보다 min-height가 크면
-     그쪽이 이기므로 그대로 유지됨). */
-  width: 100%; height: 29px; min-height: 29px; padding: 5px 10px; font: inherit;
+     산출내역·SI Business 등)이 이 클래스를 공유하므로 한 번 고치면 전체에 반영된다. */
+  width: 100%; min-height: 29px; padding: 5px 10px; font: inherit;
   font-size: 14px; line-height: 1.2; color: var(--color-text); caret-color: var(--color-accent);
   background: var(--color-surface);
   border: 1px solid var(--color-divider); border-radius: 0;
+}
+/* input[type=date]가 select보다 몇 px 더 크게 그려지던 문제(2026-09-13, To-Do
+   알람 날짜 vs 시각 select 나란히 두고 실측 확인) — 원인은 min-height 부족이
+   아니라 Chrome이 ::-webkit-calendar-picker-indicator(달력 아이콘)에 기본으로
+   주는 padding이었다. .input 전체에 고정 height를 줘서 맞추려 했더니 이번엔
+   select 글자가 잘렸다(다른 화면 실측 확인) — select/date 내부 텍스트는
+   .btn과 달리 flex 정렬이 안 먹어서, 박스를 텍스트가 필요로 하는 높이보다
+   작게 고정하면 그대로 잘린다. 그래서 height는 다시 빼고(min-height만 유지),
+   아이콘 쪽 padding만 줄여 date input의 실제 필요 높이를 select와 맞춘다. */
+.industry-theme input[type="date"].input::-webkit-calendar-picker-indicator,
+.industry-theme input[type="time"].input::-webkit-calendar-picker-indicator {
+  padding: 0;
+  margin-left: 4px;
 }
 .industry-theme .input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
 .industry-theme .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }

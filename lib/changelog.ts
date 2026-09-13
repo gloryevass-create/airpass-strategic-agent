@@ -16,7 +16,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "개인별 폰트 설정에 나눔스퀘어 네오 옵션 추가",
       "To-Do 체크박스 완료 처리가 느리게 반응하던 문제 수정 — 서버 응답을 기다리지 않고 클릭 즉시 화면에 반영하는 낙관적 업데이트 적용(SI Business 등 즐겨찾기와 동일한 패턴)",
       "To-Do 알람 시각 입력의 분 선택 단위를 5분으로 조정 — 브라우저 네이티브 시각 선택 드롭다운이 step 속성과 무관하게 계속 1분 단위로 나오는 걸 확인해, 분 선택을 직접 만든 5분 단위 select로 교체",
-      "Industry 테마 폼 컨트롤(.input) 높이를 input[type=date]와 select가 항상 정확히 같게 고정 — To-Do 알람 날짜/시각처럼 date와 select가 나란히 있을 때 미세하게 높이가 안 맞던 문제 수정",
+      "Industry 테마 input[type=date]가 select보다 살짝 크게 그려지던 문제 수정 — 처음엔 .input에 고정 height를 줬다가 select 글자가 잘리는 부작용이 생겨, 원인이었던 달력 아이콘 기본 padding만 줄이는 방식으로 다시 수정",
     ],
   },
   {
