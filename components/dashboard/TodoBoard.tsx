@@ -17,11 +17,24 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
 }
 
-function formatDateTimeLocal(iso: string | null): string {
+// 알람을 date+time 두 개의 별도 input으로 나눈다(2026-09-13) — 하나로 합친
+// datetime-local은 Chrome에서도 step 속성이 피커 휠(스피너)의 분 단위 제한에
+// 반영되지 않는 알려진 한계가 있다(실측 확인: step={300}을 줘도 1분 단위로
+// 계속 스크롤됨). 반면 독립된 time input은 step을 주면 Chrome이 그 간격으로
+// 값을 나열하는 드롭다운을 보여준다 — 그래서 date/time을 나눠 받고
+// 서버 액션(app/dashboard/actions/todos.ts)에서 다시 합친다.
+function formatAlarmDatePart(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function formatAlarmTimePart(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function NotificationSetupBanner() {
@@ -89,19 +102,21 @@ function TodoForm({ todo, onDone }: { todo: Todo | null; onDone: (saved: boolean
             </select>
           </div>
         </div>
-        <div className="field">
-          <label>알람 (선택)</label>
-          {/* step=300(5분)으로 지정해 브라우저 네이티브 datetime-local 피커의
-              분 선택 단위를 5분으로 맞춘다(2026-09-13, 1분 단위 스크롤이 번거롭다는
-              피드백) — 값 자체는 여전히 자유롭게 타이핑 입력 가능, 휠/화살표
-              조작만 5분 단위로 움직인다. */}
-          <input
-            className="input"
-            type="datetime-local"
-            name="alarmAt"
-            step={300}
-            defaultValue={formatDateTimeLocal(todo?.alarmAt ?? null)}
-          />
+        <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
+          <div className="field" style={{ flex: "1 1 160px" }}>
+            <label>알람 날짜 (선택)</label>
+            <input className="input" type="date" name="alarmDate" defaultValue={formatAlarmDatePart(todo?.alarmAt ?? null)} />
+          </div>
+          <div className="field" style={{ flex: "1 1 160px" }}>
+            <label>알람 시각</label>
+            <input
+              className="input"
+              type="time"
+              name="alarmTime"
+              step={300}
+              defaultValue={formatAlarmTimePart(todo?.alarmAt ?? null)}
+            />
+          </div>
         </div>
         {state?.error && <p style={{ color: "var(--color-accent-900)", fontSize: 13 }}>{state.error}</p>}
         <div style={{ display: "flex", gap: "var(--space-2)" }}>
