@@ -101,23 +101,12 @@ function TodoForm({ todo, onDone }: { todo: Todo | null; onDone: (saved: boolean
           <label>제목 *</label>
           <input className="input" name="title" required maxLength={200} defaultValue={todo?.title ?? ""} placeholder="예: 산출내역 발송" />
         </div>
-        {/* Safari(데스크톱+iOS 전부, WebKit 엔진 공유)에서만 input[type=date]가
-            좁은 칸에서 옆 select와 겹쳐 보이는 문제가 실기기 캡처로 확인됐다
-            (2026-09-14, 데스크톱 Chrome·Playwright WebKit 시뮬레이션에서는
-            재현 안 됨 — 실기기만의 여유 공간 계산 차이로 추정). Chrome/Android
-            등 다른 브라우저는 기존 2단 배치가 문제없이 잘 맞아서(사용자 확인),
-            전체를 다 넓히는 대신 .todo-half-field 클래스로 flex-basis를 두고
-            @supports(-webkit-touch-callout:none)(사파리 전용 CSS 피처 쿼리 —
-            Chrome은 이 프로퍼티 자체를 지원 안 해 매치되지 않는다)로 Safari만
-            220px로 올려 한 줄에 하나씩 줄바꿈되게 하고, 나머지 브라우저는
-            원래 160px 2단 배치를 그대로 유지한다(components/industryTheme.css
-            참고). */}
         <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
-          <div className="field todo-half-field">
+          <div className="field" style={{ flex: "1 1 160px" }}>
             <label>기한</label>
             <input className="input" type="date" name="dueDate" defaultValue={todo?.dueDate ?? ""} />
           </div>
-          <div className="field todo-half-field">
+          <div className="field" style={{ flex: "1 1 160px" }}>
             <label>우선순위</label>
             <select className="input" name="priority" defaultValue={todo?.priority ?? "medium"}>
               <option value="high">높음</option>
@@ -127,11 +116,11 @@ function TodoForm({ todo, onDone }: { todo: Todo | null; onDone: (saved: boolean
           </div>
         </div>
         <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
-          <div className="field todo-half-field">
+          <div className="field" style={{ flex: "1 1 160px" }}>
             <label>알람 날짜 (선택)</label>
             <input className="input" type="date" name="alarmDate" defaultValue={formatAlarmDatePart(todo?.alarmAt ?? null)} />
           </div>
-          <div className="field todo-half-field">
+          <div className="field" style={{ flex: "1 1 160px" }}>
             <label>알람 시각</label>
             <div style={{ display: "flex", gap: "var(--space-2)" }}>
               <select className="input" name="alarmHour" defaultValue={formatAlarmHourPart(todo?.alarmAt ?? null)}>

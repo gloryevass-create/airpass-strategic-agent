@@ -18,7 +18,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "To-Do 알람 시각 입력의 분 선택 단위를 5분으로 조정 — 브라우저 네이티브 시각 선택 드롭다운이 step 속성과 무관하게 계속 1분 단위로 나오는 걸 확인해, 분 선택을 직접 만든 5분 단위 select로 교체",
       "긴급 수정: input[type=date]에 준 display:flex가 모바일 Safari에서 날짜 필드 자체가 안 보이는 회귀를 일으켜 즉시 원복 — input[type=date] vs select 높이를 CSS로 완전히 맞추는 시도는 브라우저마다 네이티브 렌더링이 달라 포기(전체 화면 영향받는 공용 클래스라 안전한 쪽으로 되돌림)",
       "To-Do 기한/알람 날짜 입력이 좁은 모바일 화면에서 옆 선택박스와 겹쳐 보이던 문제 수정 — flex item 기본 min-width 때문에 date input이 줄어들지 못하고 넘치던 것을 .field에 min-width:0으로 해결(Industry 테마 전체 공용 flex 행에 적용되는 안전한 일반 수정)",
-      "위 수정 후에도 실기기(iOS Safari)에서 미세한 겹침이 남아있다는 피드백으로 재수정 — Chrome/Android는 기존 2단 배치를 그대로 유지하고, Safari(데스크톱+iOS)에서만 @supports(-webkit-hyphens:none)로 flex-basis를 220px로 올려 한 줄에 하나씩 줄바꿈되게 분기 처리",
+      "위 시도들이 모두 실패해 근본 원인(iOS Safari의 input[type=date]가 고유 최소 너비를 가져 width:100%를 무시함)을 제대로 해결 — appearance:none으로 네이티브 렌더링 자체를 꺼서 원천 차단(사용자 제공 해결책 적용), Playwright WebKit으로 여러 화면 폭·값 있음/없음 상태 모두 겹침 0px 확인 후 반영. 이전 Safari 전용 분기 CSS는 걷어냄",
     ],
   },
   {
