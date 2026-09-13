@@ -107,14 +107,8 @@ function TodoForm({ todo, onDone }: { todo: Todo | null; onDone: (saved: boolean
   );
 }
 
-function TodoRow({ todo, onEdit }: { todo: Todo; onEdit: () => void }) {
+function TodoRow({ todo, onToggle, onEdit }: { todo: Todo; onToggle: () => void; onEdit: () => void }) {
   const [, startTransition] = useTransition();
-
-  function handleToggle() {
-    startTransition(() => {
-      void toggleTodoComplete(todo.id, !todo.isCompleted);
-    });
-  }
 
   function handleDelete() {
     if (!window.confirm("이 할 일을 삭제하시겠습니까?")) return;
@@ -139,7 +133,7 @@ function TodoRow({ todo, onEdit }: { todo: Todo; onEdit: () => void }) {
         borderRadius: "var(--radius-lg)",
       }}
     >
-      <input type="checkbox" checked={todo.isCompleted} onChange={handleToggle} style={{ width: 16, height: 16, flexShrink: 0 }} />
+      <input type="checkbox" checked={todo.isCompleted} onChange={onToggle} style={{ width: 16, height: 16, flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
         <span
           style={{
@@ -217,23 +211,44 @@ function isToday(dueDate: string): boolean {
 
 export function TodoBoard({ todos }: { todos: Todo[] }) {
   const [editingId, setEditingId] = useState<string | null | "new">(null);
-  const editingTodo = editingId && editingId !== "new" ? (todos.find((t) => t.id === editingId) ?? null) : null;
   const [filter, setFilter] = useState<TodoFilter>("all");
+  const [, startTransition] = useTransition();
+  // 체크박스 완료 처리 낙관적 업데이트(2026-09-13) — SI Business 등 즐겨찾기와
+  // 동일한 패턴. 서버 액션(revalidatePath 포함) 왕복을 기다리지 않고 클릭 즉시
+  // 화면에 반영하고, 서버 데이터가 다시 내려오면 자연히 합쳐진다 — 체크박스가
+  // 느리게 반응한다는 피드백(2026-09-13)으로 도입.
+  const [completedOverrides, setCompletedOverrides] = useState<Map<string, boolean>>(new Map());
+
+  const todosWithOverrides = useMemo(
+    () => todos.map((t) => (completedOverrides.has(t.id) ? { ...t, isCompleted: completedOverrides.get(t.id)! } : t)),
+    [todos, completedOverrides]
+  );
+
+  function handleToggleComplete(id: string) {
+    const current = todosWithOverrides.find((t) => t.id === id)?.isCompleted ?? false;
+    setCompletedOverrides((prev) => new Map(prev).set(id, !current));
+    startTransition(async () => {
+      await toggleTodoComplete(id, !current);
+    });
+  }
+
+  const editingTodo =
+    editingId && editingId !== "new" ? (todosWithOverrides.find((t) => t.id === editingId) ?? null) : null;
 
   const filteredTodos = useMemo(() => {
     switch (filter) {
       case "today":
-        return todos.filter((t) => t.dueDate && isToday(t.dueDate));
+        return todosWithOverrides.filter((t) => t.dueDate && isToday(t.dueDate));
       case "pending":
-        return todos.filter((t) => !t.isCompleted);
+        return todosWithOverrides.filter((t) => !t.isCompleted);
       case "done":
-        return todos.filter((t) => t.isCompleted);
+        return todosWithOverrides.filter((t) => t.isCompleted);
       case "high":
-        return todos.filter((t) => t.priority === "high");
+        return todosWithOverrides.filter((t) => t.priority === "high");
       default:
-        return todos;
+        return todosWithOverrides;
     }
-  }, [todos, filter]);
+  }, [todosWithOverrides, filter]);
 
   return (
     <div className="industry-theme" style={{ background: "#ffffff", minHeight: "100vh" }}>
@@ -278,7 +293,7 @@ export function TodoBoard({ todos }: { todos: Todo[] }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
             {filteredTodos.map((t) => (
-              <TodoRow key={t.id} todo={t} onEdit={() => setEditingId(t.id)} />
+              <TodoRow key={t.id} todo={t} onToggle={() => handleToggleComplete(t.id)} onEdit={() => setEditingId(t.id)} />
             ))}
           </div>
         )}
