@@ -3,7 +3,15 @@
 // components/ProfileForm.tsx(선택 드롭다운 + 실제 폰트로 렌더링되는 미리보기,
 // 2026-09-10 추가 — 드롭다운에 적힌 이름만 보고는 실제 어떤 폰트가 적용된 건지
 // 알 수 없다는 사용자 피드백으로 도입) 양쪽에서 이 배열 하나만 참조한다.
-export type FontPreferenceId = "pretendard" | "system" | "gmarket" | "nanumsquare" | "noto" | "omudaye" | "lineseed";
+export type FontPreferenceId =
+  | "pretendard"
+  | "system"
+  | "gmarket"
+  | "nanumsquare"
+  | "noto"
+  | "omudaye"
+  | "lineseed"
+  | "nanumsquareneo";
 
 export type FontPreferenceOption = {
   id: FontPreferenceId;
@@ -45,6 +53,9 @@ const OMUDAYE_FONT_STACK = '"OmuDaye", -apple-system, BlinkMacSystemFont, "Malgu
 // LINE Seed(2026-09-08 추가) — 100/400/700 세 굵기만 있어 G마켓 산스/나눔스퀘어와
 // 같은 이유로 600이 정확히 없다 — 헤딩용 700으로 덮어쓴다.
 const LINESEED_FONT_STACK = '"LineSeed", -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif';
+// 나눔스퀘어 네오(2026-09-13 추가) — 나눔스퀘어의 후속 리뉴얼판. 300/400/700/800/900
+// 다섯 굵기가 있어 나눔스퀘어와 같은 이유로 600이 없다 — 헤딩용 700으로 덮어쓴다.
+const NANUMSQUARENEO_FONT_STACK = '"NanumSquareNeo", -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif';
 
 export const FONT_OPTIONS: FontPreferenceOption[] = [
   { id: "pretendard", label: "Pretendard (기본)" },
@@ -54,4 +65,5 @@ export const FONT_OPTIONS: FontPreferenceOption[] = [
   { id: "noto", label: "본고딕 (Noto Sans KR)", stack: NOTO_FONT_STACK },
   { id: "omudaye", label: "오뮤 다예쁨체", stack: OMUDAYE_FONT_STACK, headingWeight: 400 },
   { id: "lineseed", label: "LINE Seed", stack: LINESEED_FONT_STACK, headingWeight: 700 },
+  { id: "nanumsquareneo", label: "나눔스퀘어 네오", stack: NANUMSQUARENEO_FONT_STACK, headingWeight: 700 },
 ];

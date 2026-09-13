@@ -13,6 +13,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       "AI Review 목록을 Meeting Notes와 동일하게 월별 그룹 보기로 개선(최신 달이 위로, 제목 앞 문서 아이콘 추가)",
       "회원정보 수정 화면에 외부 연동 API 토큰 발급 기능 추가 — Claude 등 외부 에이전트가 이 토큰으로 본인의 개인 구글 캘린더 + 팀 캘린더 일정을 읽어가 일정 브리핑에 쓸 수 있는 공개 API(/api/calendar-feed) 신설",
+      "개인별 폰트 설정에 나눔스퀘어 네오 옵션 추가",
     ],
   },
   {

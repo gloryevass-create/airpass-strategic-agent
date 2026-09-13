@@ -112,6 +112,42 @@
   font-display: swap;
 }
 
+/* 나눔스퀘어 네오(NanumSquareNeo) — 여덟 번째 선택지(2026-09-13, 사용자 제공
+   코드에서 실수로 중복된 선언(300과 400에 같은 aLt 파일, bRg 블록 중복, 정적
+   굵기별 파일과 겹치는 가변 폰트 소스)만 정리하고 그대로 반영). 기존 나눔스퀘어
+   (NanumSquare)의 후속 리뉴얼판 — 300/400/700/800/900 다섯 굵기가 있어 600이
+   역시 없다, 그래서 나눔스퀘어와 같은 이유로 헤딩용 700으로 덮어쓴다. */
+@font-face {
+  font-family: "NanumSquareNeo";
+  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/NanumSquareNeo/NanumSquareNeoTTF-aLt.woff2") format("woff2");
+  font-weight: 300;
+  font-display: swap;
+}
+@font-face {
+  font-family: "NanumSquareNeo";
+  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/NanumSquareNeo/NanumSquareNeoTTF-bRg.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "NanumSquareNeo";
+  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/NanumSquareNeo/NanumSquareNeoTTF-cBd.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "NanumSquareNeo";
+  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/NanumSquareNeo/NanumSquareNeoTTF-dEb.woff2") format("woff2");
+  font-weight: 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "NanumSquareNeo";
+  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/NanumSquareNeo/NanumSquareNeoTTF-eHv.woff2") format("woff2");
+  font-weight: 900;
+  font-display: swap;
+}
+
 /* Color tokens — DESIGN.md (Apple-inspired, reinterpreted for a data-dense business
    dashboard: Apple's own parchment page canvas (#f5f5f7) with white raised surfaces
    (cards/table headers/dropdowns) on top, near-black ink, a single quiet Action Blue
