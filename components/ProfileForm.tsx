@@ -106,11 +106,40 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** 호출 방법 안내 — 방금 발급받은 실제 토큰(일회성 노출)과, 항상 보이는 "호출
+ * 방법" 박스(플레이스홀더 토큰) 양쪽에서 재사용한다. */
+function CallExample({ feedUrl, token }: { feedUrl: string; token: string }) {
+  return (
+    <>
+      <p className="text-muted" style={{ fontSize: 12, margin: "0 0 var(--space-1)" }}>
+        외부 에이전트가 아래처럼 호출하면 됩니다(기본 범위: 오늘부터 14일, <code>?days=30</code>
+        또는 <code>?start=2026-09-13&end=2026-09-30</code>로 조절 가능):
+      </p>
+      <pre
+        style={{
+          margin: 0,
+          padding: "var(--space-2) var(--space-3)",
+          background: "var(--color-surface, #fff)",
+          border: "1px solid var(--color-divider)",
+          borderRadius: "var(--radius-sm, 6px)",
+          fontSize: 12,
+          overflowX: "auto",
+          whiteSpace: "pre",
+        }}
+      >
+{`curl "${feedUrl}" \\\n  -H "Authorization: Bearer ${token}"`}
+      </pre>
+    </>
+  );
+}
+
 /** 외부 캘린더 브리핑 API(app/api/calendar-feed/route.ts) 개인 토큰 발급/삭제
  * (2026-09-13) — Claude 등 외부 에이전트가 이 토큰으로 본인 일정(개인 구글
  * 캘린더 + 팀 캘린더)을 읽어갈 수 있다. 평문 토큰은 발급 직후 이 화면에서
  * 딱 한 번만 보여주고(state.token), 이후로는 목록에 미리보기(preview)만
- * 남는다 — 다시 볼 수 없으니 그 자리에서 복사해야 한다. */
+ * 남는다 — 다시 볼 수 없으니 그 자리에서 복사해야 한다. 호출 방법 안내는
+ * 토큰 발급 여부와 무관하게 섹션 하단에 항상 노출한다(2026-09-13, 발급 직후
+ * 팝업을 놓쳐도 나중에 다시 볼 수 있도록). */
 function ApiTokenSection({ tokens, baseUrl }: { tokens: PersonalApiToken[]; baseUrl: string }) {
   const [state, formAction, pending] = useActionState(createApiToken, initialApiTokenState);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -199,26 +228,22 @@ function ApiTokenSection({ tokens, baseUrl }: { tokens: PersonalApiToken[]; base
           <code style={{ display: "block", fontSize: 13, wordBreak: "break-all", marginBottom: "var(--space-3)" }}>
             {state.token}
           </code>
-          <p className="text-muted" style={{ fontSize: 12, margin: "0 0 var(--space-1)" }}>
-            외부 에이전트가 아래처럼 호출하면 됩니다(기본 범위: 오늘부터 14일, <code>?days=30</code>
-            또는 <code>?start=2026-09-13&end=2026-09-30</code>로 조절 가능):
-          </p>
-          <pre
-            style={{
-              margin: 0,
-              padding: "var(--space-2) var(--space-3)",
-              background: "var(--color-surface, #fff)",
-              border: "1px solid var(--color-divider)",
-              borderRadius: "var(--radius-sm, 6px)",
-              fontSize: 12,
-              overflowX: "auto",
-              whiteSpace: "pre",
-            }}
-          >
-{`curl "${feedUrl}" \\\n  -H "Authorization: Bearer ${state.token}"`}
-          </pre>
+          <CallExample feedUrl={feedUrl} token={state.token} />
         </div>
       )}
+
+      <div
+        style={{
+          marginTop: "var(--space-4)",
+          padding: "var(--space-4)",
+          background: "var(--color-surface-muted, #f6f6f4)",
+          border: "1px solid var(--color-divider)",
+          borderRadius: "var(--radius-sm, 6px)",
+        }}
+      >
+        <p style={{ margin: "0 0 var(--space-2)", fontSize: 13, fontWeight: 600 }}>호출 방법</p>
+        <CallExample feedUrl={feedUrl} token="<발급받은 토큰>" />
+      </div>
     </div>
   );
 }
