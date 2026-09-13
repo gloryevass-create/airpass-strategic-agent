@@ -182,6 +182,27 @@
 .industry-theme .field {
   min-width: 0;
 }
+/* To-Do 폼(components/dashboard/TodoBoard.tsx)의 "기한"+"우선순위",
+   "알람 날짜"+"알람 시각" 두 칸짜리 행 전용(2026-09-14) — 기본은 160px라
+   Chrome/Android 등에서는 문제없이 2단으로 잘 붙지만, Safari(데스크톱+iOS,
+   WebKit 엔진 공유)에서는 실기기 캡처로 input[type=date]가 좁은 칸에서 옆
+   select와 겹쳐 보이는 게 확인됐다(데스크톱 Chrome·Playwright WebKit
+   시뮬레이션에서는 재현 안 됨). Safari만 220px로 올려 좁은 화면에서 아예
+   한 줄에 하나씩 줄바꿈되게 해서 그 여유 공간 계산 차이 자체를 피한다 —
+   `-webkit-touch-callout`을 먼저 써봤는데 실측(Playwright Chrome/WebKit
+   양쪽에 CSS.supports로 직접 질의)해보니 Chrome은 물론 WebKit에서도
+   false로 나와 전혀 매치가 안 됐다(이 프로퍼티는 실제 터치 기기에서만
+   등록되는 듯). 여러 후보를 같은 방식으로 실측해 `-webkit-hyphens: none`이
+   Chrome=false, WebKit=true로 정확히 갈리는 걸 확인하고 이걸로 교체했다
+   (Safari 감지에 흔히 쓰이는 조합, 여기서도 실측으로 재검증함). */
+.industry-theme .todo-half-field {
+  flex: 1 1 160px;
+}
+@supports (-webkit-hyphens: none) {
+  .industry-theme .todo-half-field {
+    flex: 1 1 220px;
+  }
+}
 .industry-theme .input {
   /* .btn과 높이를 맞춘다(2026-09-07 최초 매칭, 2026-09-08 .btn 세로 패딩 축소에
      맞춰 여기도 같이 줄임) — industryTheme.css를 쓰는 모든 화면(제품 카탈로그·
