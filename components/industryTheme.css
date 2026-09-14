@@ -393,6 +393,7 @@
     display: flex;
     align-items: baseline;
     gap: var(--space-2);
+    overflow-wrap: anywhere;
   }
   .industry-theme .list-table tbody td::before {
     content: attr(data-label);
@@ -400,14 +401,22 @@
     font-size: 12px;
     color: color-mix(in srgb, var(--color-text) 55%, transparent);
   }
-  /* 첫 칸(제목)은 라벨 없이 카드 제목처럼 크게, 아래 항목들과 선으로 구분 */
+  /* data-label이 없는 셀은 라벨 자리(64px)만 빈 채로 남아 왼쪽에 큰 여백이
+     생긴다 — Memo Board 표가 이 클래스를 같이 쓰는 걸 놓쳐 실제로 그렇게
+     보였던 버그(2026-09-14, 사용자 스크린샷). 라벨이 없으면 자리 자체를
+     만들지 않아, data-label을 안 붙인 표도 그냥 세로로 쌓이기만 한다. */
+  .industry-theme .list-table tbody td:not([data-label])::before {
+    content: none;
+  }
+  /* 제목 칸은 라벨 없이 카드 제목처럼 크게, 아래 항목들과 선으로 구분 —
+     긴 제목이 잘리지 않고 줄바꿈되도록 flex가 아니라 블록으로 둔다. */
   .industry-theme .list-table tbody td.list-cell-title {
+    display: block;
     font-size: 14px;
     padding: 0 0 var(--space-2);
     margin-bottom: var(--space-2);
     border-bottom: 1px solid var(--color-divider);
   }
-  .industry-theme .list-table tbody td.list-cell-title::before,
   .industry-theme .list-table tbody tr.list-empty-row td::before {
     content: none;
   }

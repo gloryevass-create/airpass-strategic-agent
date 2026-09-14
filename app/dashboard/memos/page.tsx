@@ -54,7 +54,7 @@ export default async function MemosPage() {
               <td>
                 <span className="tag tag-outline">{CATEGORY_LABEL[m.category] ?? m.category}</span>
               </td>
-              <td style={{ color: "var(--color-accent-700)", fontWeight: 600 }}>
+              <td className="list-cell-title" style={{ color: "var(--color-accent-700)", fontWeight: 600 }}>
                 <Link
                   href={`/dashboard/memos/${m.id}`}
                   style={{ color: "inherit", textDecoration: "none", display: "block" }}
@@ -67,8 +67,8 @@ export default async function MemosPage() {
                   )}
                 </Link>
               </td>
-              <td className="text-muted">{m.authorEmail}</td>
-              <td className="text-muted">
+              <td className="text-muted" data-label="작성자">{m.authorEmail}</td>
+              <td className="text-muted" data-label="작성일">
                 {new Date(m.createdAt).toLocaleString("ko-KR", {
                   year: "numeric",
                   month: "2-digit",
@@ -78,11 +78,11 @@ export default async function MemosPage() {
                   timeZone: "Asia/Seoul",
                 })}
               </td>
-              <td>{m.commentCount}</td>
+              <td data-label="댓글">{m.commentCount}</td>
             </tr>
           ))}
           {memos.length === 0 && (
-            <tr>
+            <tr className="list-empty-row">
               <td colSpan={5} className="text-muted" style={{ textAlign: "center", padding: "var(--space-6) 0" }}>
                 아직 등록된 메모가 없습니다.
               </td>
