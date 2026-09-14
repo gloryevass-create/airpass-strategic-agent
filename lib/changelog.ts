@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-09-14",
+    items: [
+      "SI Business·Cooperation·Marketing의 목록(칸반)/리스트 전환 버튼을 모바일에서도 다시 사용할 수 있게 복구 — 기존에는 모바일이면 리스트로 강제 고정하고 버튼을 숨겼었음",
+      "위 세 보드의 모바일 레이아웃을 두 보기 모두 한 페이지에서 위아래로 이어지는 형태로 최적화 — 칸반은 단계별 섹션이 1열로 쌓이고, 리스트는 가로 스크롤되던 6열 표 대신 항목마다 카드 한 장으로 쌓임(항목명은 카드 제목, 나머지는 라벨+값)",
+    ],
+  },
+  {
     date: "2026-09-13",
     items: [
       "AI Review 목록을 Meeting Notes와 동일하게 월별 그룹 보기로 개선(최신 달이 위로, 제목 앞 문서 아이콘 추가)",

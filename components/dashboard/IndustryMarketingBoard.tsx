@@ -825,14 +825,9 @@ export function IndustryMarketingBoard({ tasks, members }: { tasks: MarketingTas
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // 칸반은 드래그 인터랙션 위주라 좁은 화면(모바일)에 안 맞아, 저장된 기본값이
-  // 칸반이어도 모바일에서는 무시하고 리스트로 강제한다(사용자 확인, 2026-09-12).
-  // 전환 버튼 자체도 CSS(board-view-toggle)로 숨겨 칸반으로 못 돌아가게 한다.
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 767px)").matches) setView("list");
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  // 모바일에서 view를 "list"로 강제하던 코드는 두 보기 모두 모바일에서 쓰고
+  // 싶다는 요청(2026-09-14)으로 제거했다 — SI Business와 동일하게 칸반은
+  // CSS(.kanban-grid)로 1열로 쌓이고, 리스트는 카드형으로 바뀐다.
 
   const editingTask = editingId ? (tasks.find((t) => t.id === editingId) ?? null) : null;
 
@@ -1021,6 +1016,7 @@ export function IndustryMarketingBoard({ tasks, members }: { tasks: MarketingTas
 
       {view === "kanban" ? (
         <div
+          className="kanban-grid"
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${columns.length}, 1fr)`,
@@ -1150,7 +1146,7 @@ export function IndustryMarketingBoard({ tasks, members }: { tasks: MarketingTas
             <tbody>
               {listVisible.map((t) => (
                 <tr key={t.id} onClick={() => setEditingId(t.id)} style={{ cursor: "pointer", background: t.isFavorite ? "var(--color-accent-100)" : undefined }}>
-                  <td style={{ fontFamily: "var(--font-heading)", fontWeight: 600 }}>
+                  <td className="list-cell-title" style={{ fontFamily: "var(--font-heading)", fontWeight: 600 }}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                       <button
                         type="button"
@@ -1167,17 +1163,17 @@ export function IndustryMarketingBoard({ tasks, members }: { tasks: MarketingTas
                       <span className="detail-link">{t.title}</span>
                     </span>
                   </td>
-                  <td>{t.category ?? "미분류"}</td>
-                  <td>
+                  <td data-label="분류">{t.category ?? "미분류"}</td>
+                  <td data-label="상태">
                     <StatusTag status={t.status} />
                   </td>
-                  <td>{t.stage ?? "-"}</td>
-                  <td>{formatDate(t.dueDate) ?? "-"}</td>
-                  <td>{t.assignees.join(", ") || "-"}</td>
+                  <td data-label="현황">{t.stage ?? "-"}</td>
+                  <td data-label="종료 예정일">{formatDate(t.dueDate) ?? "-"}</td>
+                  <td data-label="담당자">{t.assignees.join(", ") || "-"}</td>
                 </tr>
               ))}
               {listVisible.length === 0 && (
-                <tr>
+                <tr className="list-empty-row">
                   <td colSpan={6} style={{ textAlign: "center", padding: "var(--space-6)" }} className="text-muted">
                     조건에 맞는 업무가 없습니다.
                   </td>

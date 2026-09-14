@@ -935,14 +935,12 @@ export function IndustryBusinessBoard({
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // 칸반은 드래그 인터랙션 위주라 좁은 화면(모바일)에 안 맞아, 저장된 기본값이
-  // 칸반이어도 모바일에서는 무시하고 리스트로 강제한다(사용자 확인, 2026-09-12).
-  // 전환 버튼 자체도 CSS(board-view-toggle)로 숨겨 칸반으로 못 돌아가게 한다.
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 767px)").matches) setView("list");
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  // 2026-09-12에는 모바일에서 view를 "list"로 강제하고 전환 버튼도 숨겼었는데,
+  // 두 보기 모두 모바일에서 쓰고 싶다는 요청(2026-09-14)으로 되돌렸다 — 대신
+  // 칸반은 모바일에서 CSS(.kanban-grid)로 1열로 쌓아 단계별 섹션이 위에서
+  // 아래로 이어지는 형태가 되고, 리스트는 표 대신 카드형으로 바뀐다
+  // (components/industryTheme.css). 칸반 카드의 단계 이동은 모바일에서
+  // 드래그가 안 먹지만 카드 안 <select>로 그대로 바꿀 수 있다.
 
   const editingProject = editingId ? (projects.find((p) => p.id === editingId) ?? null) : null;
 
@@ -1146,6 +1144,7 @@ export function IndustryBusinessBoard({
 
       {view === "kanban" ? (
         <div
+          className="kanban-grid"
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${columns.length}, 1fr)`,
@@ -1278,7 +1277,7 @@ export function IndustryBusinessBoard({
             <tbody>
               {listVisible.map((p) => (
                 <tr key={p.id} onClick={() => setEditingId(p.id)} style={{ cursor: "pointer", background: p.isFavorite ? "var(--color-accent-100)" : undefined }}>
-                  <td style={{ fontFamily: "var(--font-heading)", fontWeight: 600 }}>
+                  <td className="list-cell-title" style={{ fontFamily: "var(--font-heading)", fontWeight: 600 }}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                       <button
                         type="button"
@@ -1298,17 +1297,17 @@ export function IndustryBusinessBoard({
                       <span className="detail-link">{p.title}</span>
                     </span>
                   </td>
-                  <td>{p.orgName ?? "-"}</td>
-                  <td>
+                  <td data-label="발주기관">{p.orgName ?? "-"}</td>
+                  <td data-label="상태">
                     <StatusTag status={p.status} />
                   </td>
-                  <td>{p.stage ?? "미분류"}</td>
-                  <td>{formatDate(p.submissionDate) ?? "-"}</td>
-                  <td>{p.assignees.join(", ") || "-"}</td>
+                  <td data-label="단계">{p.stage ?? "미분류"}</td>
+                  <td data-label="제출일">{formatDate(p.submissionDate) ?? "-"}</td>
+                  <td data-label="담당자">{p.assignees.join(", ") || "-"}</td>
                 </tr>
               ))}
               {listVisible.length === 0 && (
-                <tr>
+                <tr className="list-empty-row">
                   <td colSpan={6} style={{ textAlign: "center", padding: "var(--space-6)" }} className="text-muted">
                     조건에 맞는 사업이 없습니다.
                   </td>

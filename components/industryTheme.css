@@ -351,10 +351,71 @@
   .industry-theme .day-item-dot {
     display: none;
   }
-  /* 칸반은 드래그 인터랙션 위주라 좁은 화면에 안 맞아, 전환 버튼 자체를 숨기고
-     리스트만 쓰게 한다(JS 쪽에서도 마운트 시 view를 강제로 "list"로 바꿈). */
-  .industry-theme .board-view-toggle {
+  /* 2026-09-12에는 칸반이 드래그 위주라 모바일에 안 맞다고 보고 전환 버튼을
+     숨긴 채 리스트만 쓰게 했는데, 두 보기 모두 모바일에서 쓰고 싶다는 요청
+     (2026-09-14)으로 버튼을 되살렸다 — 대신 아래 .kanban-grid/.list-table
+     규칙으로 두 보기 모두 "위에서 아래로 이어지는 한 페이지" 형태가 되게
+     모바일 레이아웃을 따로 만들었다. 칸반 카드의 단계 이동은 드래그가 안
+     먹는 대신 카드 안 <select>로 그대로 할 수 있다. */
+
+  /* 칸반: 단계 수만큼 열을 만드는 인라인 grid-template-columns(repeat(N,1fr))를
+     이겨야 해서 !important — 모바일에서는 1열로 쌓아 단계별 섹션이 위에서
+     아래로 이어지게 한다. */
+  .industry-theme .kanban-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 리스트: 6열짜리 표를 그대로 두면 가로 스크롤 없이는 볼 수 없어, 행마다
+     카드 한 장으로 쌓이도록 바꾼다(thead는 숨기고 각 셀 앞에 data-label을
+     붙여 어떤 값인지 보이게 — 흔히 쓰는 반응형 표 패턴). 마크업은 데스크톱과
+     그대로 공유하고 CSS로만 바꾼다. */
+  .industry-theme .list-table,
+  .industry-theme .list-table tbody,
+  .industry-theme .list-table tr,
+  .industry-theme .list-table tbody td {
+    display: block;
+    width: 100%;
+  }
+  .industry-theme .list-table thead {
     display: none;
+  }
+  .industry-theme .list-table tbody tr {
+    border: 1px solid var(--color-divider);
+    border-radius: 8px;
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+    background: #ffffff;
+  }
+  .industry-theme .list-table tbody td {
+    border: 0;
+    padding: 3px 0;
+    font-size: 13px;
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+  .industry-theme .list-table tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 64px;
+    font-size: 12px;
+    color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  }
+  /* 첫 칸(제목)은 라벨 없이 카드 제목처럼 크게, 아래 항목들과 선으로 구분 */
+  .industry-theme .list-table tbody td.list-cell-title {
+    font-size: 14px;
+    padding: 0 0 var(--space-2);
+    margin-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-divider);
+  }
+  .industry-theme .list-table tbody td.list-cell-title::before,
+  .industry-theme .list-table tbody tr.list-empty-row td::before {
+    content: none;
+  }
+  .industry-theme .list-table tbody tr.list-empty-row {
+    border-style: dashed;
+  }
+  .industry-theme .list-table tbody tr.list-empty-row td {
+    display: block;
   }
   /* 캘린더 월/주 보기 날짜 칸이 7열이라 좁아서 일정 제목이 금방 잘린다
      (2026-09-12) — 칸 좌우 padding을 줄이고 글자를 살짝 작게 해서 더 많은
