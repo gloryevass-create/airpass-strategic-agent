@@ -56,9 +56,17 @@ export async function resolveBaseUrl(): Promise<string> {
 async function performSend(
   supabase: Awaited<ReturnType<typeof requireAuthedClient>>["supabase"],
   user: Awaited<ReturnType<typeof requireAuthedClient>>["user"],
-  params: { recipients: string[]; subject: string; message: string; fileIds: string[]; quotationId: string | null }
+  params: {
+    recipients: string[];
+    subject: string;
+    message: string;
+    fileIds: string[];
+    quotationId: string | null;
+    /** 메일 하단 푸터 — 폼에서 넘어온 값(AI 자동발송처럼 안 넘기면 기본값) */
+    footer?: { homepage: string; youtube: string; companyAddress: string };
+  }
 ): Promise<SendMaterialEmailState> {
-  const { recipients, subject, message, fileIds, quotationId } = params;
+  const { recipients, subject, message, fileIds, quotationId, footer } = params;
 
   if (recipients.length === 0) return { error: "받는 사람 이메일을 입력하세요." };
   const invalid = recipients.find((r) => !EMAIL_RE.test(r));
@@ -141,6 +149,9 @@ async function performSend(
       videos,
       quotation,
       productLinks,
+      homepage: footer?.homepage,
+      youtube: footer?.youtube,
+      companyAddress: footer?.companyAddress,
       smtp,
     });
   } catch (e) {
@@ -174,8 +185,13 @@ export async function sendMaterialEmailAction(
   const message = String(formData.get("message") ?? "").trim();
   const fileIds = formData.getAll("fileIds").map(String).filter(Boolean);
   const quotationId = String(formData.get("quotationId") ?? "").trim() || null;
+  const footer = {
+    homepage: String(formData.get("homepage") ?? "").trim(),
+    youtube: String(formData.get("youtube") ?? "").trim(),
+    companyAddress: String(formData.get("companyAddress") ?? "").trim(),
+  };
 
-  return performSend(supabase, user, { recipients, subject, message, fileIds, quotationId });
+  return performSend(supabase, user, { recipients, subject, message, fileIds, quotationId, footer });
 }
 
 /** AI 명령 입력창에서 자료메일발송을 완전 자동으로 처리한다 — 제목·내용을

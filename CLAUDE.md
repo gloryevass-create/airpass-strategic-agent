@@ -131,6 +131,14 @@ HTML 템플릿(`buildMaterialEmailHtml`)과는 완전히 별개다(그건 안 �
     값이었고(`name`/`title`/`email`), 2026-08-30부터 `profiles.phone`(핸드폰번호)이 있으면
     "M. {phone} · T. {회사 대표번호}" 형태로 개인 번호도 함께 보여준다(없으면 회사 대표번호만,
     `lib/quotationCompany.ts::QUOTATION_SUPPLIER.phone`은 그대로 고정값).
+  - **메일 하단 푸터(홈페이지·유튜브·회사주소)**: 원래 템플릿에 하드코딩돼 있었는데,
+    발송할 때마다 고칠 수 있어야 한다는 요청(2026-09-14)으로 발송 폼 입력란으로 뺐다
+    (기본값은 `lib/materialEmailDefaults.ts`의 `DEFAULT_MATERIAL_EMAIL_HOMEPAGE`/
+    `_YOUTUBE`/`_ADDRESS` — 평소엔 손대지 않으면 예전과 같은 메일이 나간다). 회사주소
+    줄은 이때 새로 추가했다. `buildMaterialEmailHtml`의 세 파라미터는 선택값이라
+    안 넘기면 기본값을 쓴다 — AI 자동발송과 발송 이력 "보낸 메일 보기" 미리보기는
+    푸터를 따로 저장하지 않아(로그 컬럼 없음) 항상 기본값으로 다시 그려진다(발신자
+    서명·제품자료 링크를 지금 시점으로 다시 만드는 것과 같은 한계).
 
 ## 첨부파일 저장소 (제조사 서류 / Work Journal / Memo Board)
 

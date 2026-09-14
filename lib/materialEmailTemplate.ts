@@ -13,6 +13,11 @@
 // 이번 이식에서는 생략했다 — 각진 모서리 + 헤어라인 테두리만으로도 Industry 특유의
 // 와이어프레임 룩은 충분히 남는다(사용자 확인 없이 내린 판단, 시각적으로 사소한 생략).
 import { QUOTATION_SUPPLIER } from "@/lib/quotationCompany";
+import {
+  DEFAULT_MATERIAL_EMAIL_HOMEPAGE,
+  DEFAULT_MATERIAL_EMAIL_YOUTUBE,
+  DEFAULT_MATERIAL_EMAIL_ADDRESS,
+} from "@/lib/materialEmailDefaults";
 
 export type MaterialEmailFileLink = { name: string; link: string };
 export type MaterialEmailProductLink = { label: string; link: string | null };
@@ -82,6 +87,19 @@ export function matchProductMaterialFiles<T extends { id: string; name: string }
     const match = files.find((f) => keywords.every((k) => normalize(f.name).includes(normalize(k))));
     return { label, fileId: match ? match.id : null };
   });
+}
+
+// 푸터 입력란에는 "www.airpass.co.kr"처럼 스킴 없이 적는 게 자연스러워서, 링크로
+// 만들 때만 http를 붙인다(이미 http(s)로 시작하면 그대로 둔다).
+function withHttp(value: string): string {
+  return /^https?:\/\//i.test(value) ? value : `http://${value}`;
+}
+
+// 유튜브는 "@AIRPASS_XR" 핸들만 적는 걸 기본으로 보고 채널 URL로 바꾼다 —
+// 전체 URL을 직접 붙여넣은 경우에는 그대로 쓴다.
+function youtubeUrl(value: string): string {
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://www.youtube.com/${value.startsWith("@") ? value : `@${value}`}`;
 }
 
 function escapeHtml(text: string): string {
@@ -187,9 +205,17 @@ export function buildMaterialEmailHtml(params: {
   videos: MaterialEmailFileLink[];
   quotation: MaterialEmailQuotation;
   productLinks: MaterialEmailProductLink[];
+  /** 하단 푸터 — 발송 폼에서 직접 고칠 수 있다(2026-09-14). 값을 안 넘기면
+   * 기존과 같은 기본값(lib/materialEmailDefaults.ts)을 쓴다. */
+  homepage?: string;
+  youtube?: string;
+  companyAddress?: string;
 }): string {
   const { subject, message, senderName, senderTitle, senderEmail, senderPhone, logoUrl, documents, videos, quotation, productLinks } =
     params;
+  const homepage = (params.homepage ?? DEFAULT_MATERIAL_EMAIL_HOMEPAGE).trim();
+  const youtube = (params.youtube ?? DEFAULT_MATERIAL_EMAIL_YOUTUBE).trim();
+  const companyAddress = (params.companyAddress ?? DEFAULT_MATERIAL_EMAIL_ADDRESS).trim();
 
   const senderLine = senderTitle ? `${escapeHtml(senderName)} ${escapeHtml(senderTitle)}` : escapeHtml(senderName);
   // 개인 핸드폰번호(profiles.phone)가 등록돼 있을 때만 M. 줄을 보여준다 — 회사
@@ -243,10 +269,19 @@ export function buildMaterialEmailHtml(params: {
           </div>
         </div>
 
-        <div style="display:flex;gap:16px;margin-bottom:16px;font-size:13.5px;font-weight:600;">
-          <a href="http://www.airpass.co.kr" style="color:${COLOR.accent700};text-decoration:none;">홈페이지 : www.airpass.co.kr</a>
-          <a href="https://www.youtube.com/@AIRPASS_XR" style="color:${COLOR.accent700};text-decoration:none;">유튜브 : @AIRPASS_XR</a>
-        </div>
+        ${
+          homepage || youtube
+            ? `<div style="display:flex;gap:16px;margin-bottom:8px;font-size:13.5px;font-weight:600;">
+          ${homepage ? `<a href="${escapeHtml(withHttp(homepage))}" style="color:${COLOR.accent700};text-decoration:none;">홈페이지 : ${escapeHtml(homepage)}</a>` : ""}
+          ${youtube ? `<a href="${escapeHtml(youtubeUrl(youtube))}" style="color:${COLOR.accent700};text-decoration:none;">유튜브 : ${escapeHtml(youtube)}</a>` : ""}
+        </div>`
+            : ""
+        }
+        ${
+          companyAddress
+            ? `<div style="margin-bottom:16px;font-size:13px;color:${COLOR.neutral700};">회사주소 : ${escapeHtml(companyAddress)}</div>`
+            : ""
+        }
 
         <div style="border-top:1px solid ${COLOR.divider};padding-top:16px;font-size:12.5px;color:${COLOR.neutral600};">*당사에 보내주신 관심에 깊이 감사드립니다.</div>
       </div>

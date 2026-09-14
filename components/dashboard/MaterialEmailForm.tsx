@@ -5,7 +5,13 @@ import type { DriveMaterialFile } from "@/lib/googleDriveMaterials";
 import type { QuotationSummary } from "@/lib/queries/quotations";
 import { sendMaterialEmailAction, type SendMaterialEmailState } from "@/app/dashboard/actions/materialEmail";
 import { AI_MATERIAL_EMAIL_DRAFT_KEY, type AiMaterialEmailDraft } from "@/lib/aiMaterialEmailDraft";
-import { DEFAULT_MATERIAL_EMAIL_SUBJECT, DEFAULT_MATERIAL_EMAIL_MESSAGE } from "@/lib/materialEmailDefaults";
+import {
+  DEFAULT_MATERIAL_EMAIL_SUBJECT,
+  DEFAULT_MATERIAL_EMAIL_MESSAGE,
+  DEFAULT_MATERIAL_EMAIL_HOMEPAGE,
+  DEFAULT_MATERIAL_EMAIL_YOUTUBE,
+  DEFAULT_MATERIAL_EMAIL_ADDRESS,
+} from "@/lib/materialEmailDefaults";
 import { buildMaterialEmailHtml } from "@/lib/materialEmailTemplate";
 import { NavIcon } from "@/components/icons/NavIcon";
 
@@ -295,6 +301,12 @@ export function MaterialEmailForm({
   const [subject, setSubject] = useState(DEFAULT_MATERIAL_EMAIL_SUBJECT);
   const [message, setMessage] = useState(DEFAULT_MATERIAL_EMAIL_MESSAGE);
   const [quotationId, setQuotationId] = useState<string | null>(null);
+  // 메일 하단 푸터 — 예전에는 템플릿에 하드코딩돼 있었는데 발송할 때마다 고칠 수
+  // 있어야 한다는 요청(2026-09-14)으로 입력란으로 뺐다. 기본값은 그대로라 평소엔
+  // 손대지 않아도 예전과 같은 메일이 나간다.
+  const [homepage, setHomepage] = useState(DEFAULT_MATERIAL_EMAIL_HOMEPAGE);
+  const [youtube, setYoutube] = useState(DEFAULT_MATERIAL_EMAIL_YOUTUBE);
+  const [companyAddress, setCompanyAddress] = useState(DEFAULT_MATERIAL_EMAIL_ADDRESS);
   const [aiNotice, setAiNotice] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -358,6 +370,9 @@ export function MaterialEmailForm({
         ? { quoteNumber: selectedQuotation.quoteNumber, customerName: selectedQuotation.customerName, printUrl: "#" }
         : null,
       productLinks: productLinkLabels.map((p) => ({ label: p.label, link: p.matched ? "#" : null })),
+      homepage,
+      youtube,
+      companyAddress,
     });
     // 자리표시 링크(href="#")를 이 iframe(srcDoc) 안에서 클릭하면, 상대 경로가
     // "about:srcdoc"이 아니라 이 화면(부모 문서)의 실제 URL을 기준으로 풀려서
@@ -369,7 +384,21 @@ export function MaterialEmailForm({
       "</head>",
       `<script>document.addEventListener("click",function(e){var a=e.target.closest("a");if(a)e.preventDefault();});</script></head>`
     );
-  }, [files, selected, subject, message, senderName, senderTitle, senderEmail, senderPhone, selectedQuotation, productLinkLabels]);
+  }, [
+    files,
+    selected,
+    subject,
+    message,
+    senderName,
+    senderTitle,
+    senderEmail,
+    senderPhone,
+    selectedQuotation,
+    productLinkLabels,
+    homepage,
+    youtube,
+    companyAddress,
+  ]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -468,6 +497,58 @@ export function MaterialEmailForm({
           placeholder="보내드리는 자료에 대한 안내 문구를 입력하세요."
           className="input"
         />
+      </div>
+
+      <div className="field">
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 500, color: "var(--color-text)" }}>
+          <NavIcon name="link" width={14} height={14} stroke="var(--color-accent)" />
+          메일 하단 정보
+        </label>
+        <p className="text-muted" style={{ fontSize: 12, margin: "0 0 8px" }}>
+          메일 맨 아래에 들어가는 홈페이지·유튜브·회사주소입니다. 기본값이 채워져 있고, 이번 발송에만
+          다르게 넣고 싶으면 고쳐서 보내세요. 비워두면 그 줄은 메일에서 빠집니다.
+        </p>
+        <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
+          <div className="field" style={{ flex: "1 1 220px" }}>
+            <label htmlFor="homepage" style={{ fontSize: 12 }}>홈페이지</label>
+            <input
+              id="homepage"
+              name="homepage"
+              type="text"
+              maxLength={200}
+              value={homepage}
+              onChange={(e) => setHomepage(e.target.value)}
+              placeholder="www.airpass.co.kr"
+              className="input"
+            />
+          </div>
+          <div className="field" style={{ flex: "1 1 220px" }}>
+            <label htmlFor="youtube" style={{ fontSize: 12 }}>유튜브</label>
+            <input
+              id="youtube"
+              name="youtube"
+              type="text"
+              maxLength={200}
+              value={youtube}
+              onChange={(e) => setYoutube(e.target.value)}
+              placeholder="@AIRPASS_XR"
+              className="input"
+            />
+          </div>
+        </div>
+        <div className="field" style={{ marginTop: "var(--space-3)" }}>
+          <label htmlFor="companyAddress" style={{ fontSize: 12 }}>회사주소</label>
+          <input
+            id="companyAddress"
+            name="companyAddress"
+            type="text"
+            maxLength={300}
+            value={companyAddress}
+            onChange={(e) => setCompanyAddress(e.target.value)}
+            placeholder="경기도 하남시 하남대로 947(풍산동, 하남 테크노밸리 U1CENTER) D동 15층"
+            className="input"
+          />
+        </div>
       </div>
 
       <QuotationPicker quotations={quotations} value={quotationId} onChange={setQuotationId} />

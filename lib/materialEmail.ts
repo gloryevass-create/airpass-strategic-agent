@@ -43,6 +43,10 @@ export async function sendMaterialEmail(params: {
   videos: MaterialEmailFileLink[];
   quotation: MaterialEmailQuotation;
   productLinks: MaterialEmailProductLink[];
+  /** 메일 하단 푸터 — 발송 폼에서 고칠 수 있다(2026-09-14). 안 넘기면 기본값. */
+  homepage?: string;
+  youtube?: string;
+  companyAddress?: string;
   smtp: MaterialEmailSmtpConfig;
 }): Promise<void> {
   const { host, port, user, password, fromName } = params.smtp;
@@ -59,6 +63,9 @@ export async function sendMaterialEmail(params: {
     videos: params.videos,
     quotation: params.quotation,
     productLinks: params.productLinks,
+    homepage: params.homepage,
+    youtube: params.youtube,
+    companyAddress: params.companyAddress,
   });
 
   const transporter = nodemailer.createTransport({

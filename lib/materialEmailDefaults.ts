@@ -11,3 +11,12 @@ export const DEFAULT_MATERIAL_EMAIL_MESSAGE = `안녕하세요, 에어패스입�
 감사합니다.
 
 에어패스 드림`;
+
+// 메일 하단 푸터(홈페이지·유튜브·회사주소) — 원래 템플릿에 하드코딩돼 있었는데,
+// 발송할 때마다 고칠 수 있어야 한다는 요청(2026-09-14)으로 폼 입력란으로 빼면서
+// 그 기본값만 여기로 옮겼다. 제목·안내문과 같은 이유로 클라이언트(폼 초기값)와
+// 서버(AI 자동발송·이력 미리보기) 양쪽이 함께 참조한다.
+export const DEFAULT_MATERIAL_EMAIL_HOMEPAGE = "www.airpass.co.kr";
+export const DEFAULT_MATERIAL_EMAIL_YOUTUBE = "@AIRPASS_XR";
+export const DEFAULT_MATERIAL_EMAIL_ADDRESS =
+  "경기도 하남시 하남대로 947(풍산동, 하남 테크노밸리 U1CENTER) D동 15층";
