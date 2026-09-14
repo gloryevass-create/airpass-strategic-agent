@@ -1039,8 +1039,12 @@ export function QuotationBoard({
             </div>
           </div>
 
-          <div style={{ maxHeight: "70vh", overflow: "auto", borderTop: "1px solid var(--color-divider)" }}>
-            <table className="table gradient-table-head">
+          {/* 모바일에서는 8열 표를 가로 스크롤해야 해서 다른 목록 화면들과 같은
+              카드형(.mobile-card-table — components/industryTheme.css)으로 바꾸고,
+              헤더 고정용 70vh 스크롤도 모바일에서는 푼다(.table-scroll-area,
+              2026-09-14). 인쇄용/고객 공개 페이지는 이 목록과 별개라 그대로. */}
+          <div className="table-scroll-area" style={{ maxHeight: "70vh", overflow: "auto", borderTop: "1px solid var(--color-divider)" }}>
+            <table className="table gradient-table-head mobile-card-table">
               <thead>
                 <tr>
                   <th style={{ position: "sticky", top: 0, paddingLeft: "var(--space-4)" }}>번호</th>
@@ -1056,11 +1060,12 @@ export function QuotationBoard({
               <tbody>
                 {filtered.map((q, index) => (
                   <tr key={q.id}>
-                    <td className="text-muted" style={{ paddingLeft: "var(--space-4)" }}>{index + 1}</td>
-                    <td className="text-muted" style={{ whiteSpace: "nowrap" }}>
+                    {/* 카드형에서는 행 번호가 의미 없어 모바일에서만 숨긴다 */}
+                    <td className="text-muted list-cell-hide-mobile" style={{ paddingLeft: "var(--space-4)" }}>{index + 1}</td>
+                    <td className="text-muted" data-label="산출일자" style={{ whiteSpace: "nowrap" }}>
                       {formatDate(q.quoteDate)}
                     </td>
-                    <td>
+                    <td className="list-cell-title">
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
                           <span onClick={() => setEditingId(q.id)} className="detail-link" style={{ cursor: "pointer", whiteSpace: "normal", fontWeight: 600 }}>
@@ -1073,19 +1078,19 @@ export function QuotationBoard({
                         <span className="text-muted" style={{ fontSize: 12 }}>{q.quoteNumber}</span>
                       </div>
                     </td>
-                    <td className="text-muted" style={{ whiteSpace: "normal" }}>
+                    <td className="text-muted" data-label="산출명" style={{ whiteSpace: "normal" }}>
                       {q.projectTitle || "-"}
                     </td>
-                    <td>
+                    <td data-label="연결 사업">
                       {q.businessProjectTitle ? (
                         <span className="tag tag-outline">{q.businessProjectTitle}</span>
                       ) : (
                         <span className="text-muted">-</span>
                       )}
                     </td>
-                    <td className="text-muted">{q.managerName || "-"}</td>
-                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{formatCurrency(q.totalAmount)}원</td>
-                    <td>
+                    <td className="text-muted" data-label="담당">{q.managerName || "-"}</td>
+                    <td data-label="금액" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{formatCurrency(q.totalAmount)}원</td>
+                    <td data-label="관리">
                       <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
                         <button type="button" onClick={() => openQuotationPopup(q.id)} className="btn btn-ghost" style={{ fontSize: 12 }}>
                           인쇄
@@ -1106,7 +1111,7 @@ export function QuotationBoard({
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr>
+                  <tr className="list-empty-row">
                     <td colSpan={8} className="text-muted" style={{ textAlign: "center", padding: "var(--space-6)" }}>
                       {quotations.length === 0 ? "등록된 산출내역이 없습니다." : "검색 결과가 없습니다."}
                     </td>

@@ -470,8 +470,8 @@ export function ProductCatalogTable({
         {/* 모바일에서는 9열 표를 가로 스크롤해야 봐야 해서, 다른 목록 화면들과
             같은 카드형(.mobile-card-table — components/industryTheme.css)으로
             바꾼다(2026-09-14). 바깥 70vh 스크롤 영역도 모바일에서는 페이지
-            스크롤 안에 또 스크롤이 생겨 불편하므로 풀어준다(.catalog-scroll). */}
-        <div className="catalog-scroll" style={{ maxHeight: "70vh", overflow: "auto", borderTop: "1px solid var(--color-divider)" }}>
+            스크롤 안에 또 스크롤이 생겨 불편하므로 풀어준다(.table-scroll-area). */}
+        <div className="table-scroll-area" style={{ maxHeight: "70vh", overflow: "auto", borderTop: "1px solid var(--color-divider)" }}>
           <table className="table mobile-card-table">
             <thead>
               <tr>
