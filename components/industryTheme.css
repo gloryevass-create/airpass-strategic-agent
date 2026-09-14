@@ -444,6 +444,14 @@
   .industry-theme .vendor-doc-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
+  /* 제조사 관리 업체 목록(aside)은 데스크톱에서 좌측 사이드로 쓰려고
+     maxWidth: 320을 인라인으로 박아뒀는데, 모바일에서는 아래 상세 패널만
+     전체 폭을 쓰다 보니 두 박스 너비가 달라 어긋나 보였다(2026-09-14,
+     사용자 아이폰 캡처) — 세로로 쌓이는 모바일에서는 상세 패널과 같은
+     전체 폭을 쓰게 한다. 인라인 style을 이겨야 해서 !important 필요. */
+  .industry-theme .vendor-list-aside {
+    max-width: none !important;
+  }
   /* 마케팅분석(네이버키워드/네이버블로그)의 차트+표 2열 섹션도 같은 이유로
      모바일에서 화면 밖으로 넘쳤다 — 1열로 쌓는다(2026-09-12). */
   .industry-theme .two-col-section {

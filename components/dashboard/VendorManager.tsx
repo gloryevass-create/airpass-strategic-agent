@@ -92,6 +92,7 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
   const [saving, startSaving] = useTransition();
   const [, startTransition] = useTransition();
   const fileInputRefs = useRef<Partial<Record<VendorDocumentType, HTMLInputElement | null>>>({});
+  const detailRef = useRef<HTMLDivElement | null>(null);
 
   const selected = isNew ? null : vendors.find((v) => v.id === selectedId) ?? null;
 
@@ -109,12 +110,22 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }
 
+  // 모바일에서는 업체 목록 아래에 상세 패널이 세로로 쌓이기 때문에, 목록에서
+  // 업체를 골라도 화면에는 여전히 목록만 보여 아무 일도 안 일어난 것처럼
+  // 보인다(2026-09-14, 사용자 요청) — 좁은 화면에서만 상세 패널로 스크롤해
+  // 준다. 데스크톱은 좌우로 나란히 있어 이미 보이므로 그대로 둔다.
+  function scrollToDetailOnMobile() {
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function choose(vendor: Vendor) {
     setSelectedId(vendor.id);
     setIsNew(false);
     setDraft(draftFromVendor(vendor));
     setMessage("");
     setError(null);
+    scrollToDetailOnMobile();
   }
 
   function newVendor() {
@@ -123,6 +134,7 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
     setDraft(EMPTY_DRAFT);
     setMessage("사업자등록증·통장 사본·명함을 먼저 올리거나 업체 정보를 직접 입력해 주세요.");
     setError(null);
+    scrollToDetailOnMobile();
   }
 
   function handleDeleteVendor(id: string) {
@@ -208,7 +220,7 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)" }}>
-      <aside style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", border: "1px solid var(--color-divider)", borderRadius: 8, boxShadow: "var(--shadow-sm)", background: "#ffffff", padding: "var(--space-4)", flex: "1 1 288px", maxWidth: 320 }}>
+      <aside className="vendor-list-aside" style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", border: "1px solid var(--color-divider)", borderRadius: 8, boxShadow: "var(--shadow-sm)", background: "#ffffff", padding: "var(--space-4)", flex: "1 1 288px", maxWidth: 320 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
             <strong>등록 업체</strong>
@@ -262,7 +274,7 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
         </div>
       </aside>
 
-      <div style={{ display: "flex", flex: "3 1 480px", flexDirection: "column", gap: "var(--space-4)", minWidth: 0 }}>
+      <div ref={detailRef} style={{ display: "flex", flex: "3 1 480px", flexDirection: "column", gap: "var(--space-4)", minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "var(--space-3)", border: "1px solid var(--color-divider)", borderRadius: 8, boxShadow: "var(--shadow-sm)", background: "#ffffff", padding: "var(--space-4)" }}>
           <div>
             <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }} className="text-muted">
