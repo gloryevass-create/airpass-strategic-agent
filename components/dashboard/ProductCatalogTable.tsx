@@ -467,8 +467,12 @@ export function ProductCatalogTable({
           </div>
         </div>
 
-        <div style={{ maxHeight: "70vh", overflow: "auto", borderTop: "1px solid var(--color-divider)" }}>
-          <table className="table">
+        {/* 모바일에서는 9열 표를 가로 스크롤해야 봐야 해서, 다른 목록 화면들과
+            같은 카드형(.mobile-card-table — components/industryTheme.css)으로
+            바꾼다(2026-09-14). 바깥 70vh 스크롤 영역도 모바일에서는 페이지
+            스크롤 안에 또 스크롤이 생겨 불편하므로 풀어준다(.catalog-scroll). */}
+        <div className="catalog-scroll" style={{ maxHeight: "70vh", overflow: "auto", borderTop: "1px solid var(--color-divider)" }}>
+          <table className="table mobile-card-table">
             <thead>
               <tr>
                 <th style={{ position: "sticky", top: 0, background: "#ffffff" }}>선택·품명</th>
@@ -495,7 +499,7 @@ export function ProductCatalogTable({
                 const canMoveDown = canReorder && index < filtered.length - 1 && next.isFavorite === p.isFavorite;
                 return (
                   <tr key={p.id} style={{ background: p.isFavorite ? "var(--color-accent-100)" : undefined }}>
-                    <td>
+                    <td className="list-cell-title">
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} style={{ accentColor: "var(--color-accent)" }} />
                         <button
@@ -533,30 +537,32 @@ export function ProductCatalogTable({
                         <span style={{ whiteSpace: "normal" }}>{p.name}</span>
                       </div>
                     </td>
-                    <td className="text-muted" style={{ whiteSpace: "normal" }}>
+                    <td className="text-muted" data-label="규격" style={{ whiteSpace: "normal" }}>
                       {p.specification ?? "-"}
                     </td>
-                    <td style={{ fontWeight: 600 }}>{formatWon(p.unitPrice)}</td>
-                    <td className="text-muted">{p.supplyType === "partner" ? "협력사" : "직공급"}</td>
-                    <td className="text-muted">{p.supplierVendorName ?? "-"}</td>
-                    <td>
+                    <td data-label="단가" style={{ fontWeight: 600 }}>{formatWon(p.unitPrice)}</td>
+                    <td className="text-muted" data-label="공급방식">{p.supplyType === "partner" ? "협력사" : "직공급"}</td>
+                    <td className="text-muted" data-label="제조사">{p.supplierVendorName ?? "-"}</td>
+                    {/* 데스크톱 헤더는 "수수료/마진율" 한 칸이지만, 모바일 카드에서는
+                        공급방식에 따라 둘 중 실제로 표시되는 쪽만 라벨로 보여준다. */}
+                    <td data-label={p.supplyType === "partner" ? "수수료율" : "마진율"}>
                       {(p.supplyType === "partner" ? p.commissionRate : p.marginRate) != null ? (
                         <span className="tag tag-accent">{formatRate(p.supplyType === "partner" ? p.commissionRate : p.marginRate)}</span>
                       ) : (
                         <span className="text-muted">-</span>
                       )}
                     </td>
-                    <td>
+                    <td data-label="조달정보">
                       {p.procurement ? (
                         <span className="tag tag-outline">{`${p.procurementChannel ?? ""} ${p.procurementNumber ?? ""}`.trim()}</span>
                       ) : (
                         <span className="text-muted">-</span>
                       )}
                     </td>
-                    <td className="text-muted" style={{ whiteSpace: "normal" }}>
+                    <td className="text-muted" data-label="비고" style={{ whiteSpace: "normal" }}>
                       {p.note ?? "-"}
                     </td>
-                    <td>
+                    <td data-label="관리">
                       <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
                         <button type="button" onClick={() => setEditing(p)} className="btn btn-ghost" style={{ fontSize: 12 }}>
                           수정
@@ -575,7 +581,7 @@ export function ProductCatalogTable({
                 );
               })}
               {filtered.length === 0 && (
-                <tr>
+                <tr className="list-empty-row">
                   <td colSpan={9} className="text-muted" style={{ textAlign: "center", padding: "var(--space-6)" }}>
                     조건에 맞는 제품이 없습니다.
                   </td>
