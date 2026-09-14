@@ -3,6 +3,15 @@
 import { useMemo, useState } from "react";
 import type { PrespecNotice } from "@/lib/queries/prespec";
 import { useScrapToolbar } from "@/lib/hooks/useScrapToolbar";
+import {
+  cardTable,
+  cardThead,
+  cardRow,
+  cardCell,
+  cardTitleCell,
+  cardEmptyRow,
+  cardEmptyCell,
+} from "@/components/dashboard/mobileCardTable";
 
 const BUSINESS_TYPE_LABEL: Record<PrespecNotice["businessType"], string> = {
   cnstwk: "공사",
@@ -132,9 +141,9 @@ export function PrespecNoticeList({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-sm border border-hairline bg-canvas-cream">
-        <table className="w-full whitespace-nowrap text-sm">
-          <thead className="bg-[#f7f7f8] text-left text-ink-mute">
+      <div className="overflow-x-auto rounded-sm border border-hairline bg-canvas-cream max-md:overflow-visible max-md:border-0 max-md:bg-transparent">
+        <table className={cardTable}>
+          <thead className={cardThead}>
             <tr>
               <th className="w-8 px-4 py-2">
                 <input
@@ -159,9 +168,11 @@ export function PrespecNoticeList({
             {filtered.map((n) => (
               <tr
                 key={n.id}
-                className={`border-t border-hairline ${scrapedIds.has(n.id) ? "bg-canvas-lavender/20" : "odd:bg-white even:bg-[#f7f7f8]"}`}
+                className={cardRow(
+                  scrapedIds.has(n.id) ? "bg-canvas-lavender/20" : "odd:bg-white even:bg-[#f7f7f8] max-md:bg-white"
+                )}
               >
-                <td className="px-4 py-2">
+                <td className="px-4 py-2 max-md:px-0 max-md:py-0.5">
                   <input
                     type="checkbox"
                     checked={scrap.selected.has(n.id)}
@@ -169,13 +180,15 @@ export function PrespecNoticeList({
                     aria-label={`${n.title} 선택`}
                   />
                 </td>
-                <td className="px-4 py-2">
+                <td className={cardCell} data-label="키워드">
                   <span className="rounded-full bg-canvas-lavender px-2 py-0.5 text-xs font-medium text-primary">
                     {n.keyword}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-ink-mute">{BUSINESS_TYPE_LABEL[n.businessType]}</td>
-                <td className="min-w-[360px] px-4 py-2 whitespace-normal">
+                <td className={`${cardCell} text-ink-mute`} data-label="구분">
+                  {BUSINESS_TYPE_LABEL[n.businessType]}
+                </td>
+                <td className={`${cardTitleCell} md:min-w-[360px]`}>
                   {scrapedIds.has(n.id) && <span className="mr-1 text-primary">★</span>}
                   {n.specDocUrls[0] ? (
                     <a
@@ -190,15 +203,25 @@ export function PrespecNoticeList({
                     n.title
                   )}
                 </td>
-                <td className="max-w-[220px] whitespace-normal px-4 py-2 text-ink-mute">{n.noticeInst ?? "-"}</td>
-                <td className="px-4 py-2">{formatWon(n.budgetAmount)}</td>
-                <td className="px-4 py-2 text-ink-mute">{formatDate(n.registeredAt)}</td>
-                <td className="px-4 py-2 text-ink-mute">{formatDate(n.opinionCloseAt)}</td>
-                <td className="px-4 py-2 text-ink-mute">
-                  {n.officialName ?? "-"}
-                  {n.officialTel && <span className="ml-1">({n.officialTel})</span>}
+                <td className={`${cardCell} text-ink-mute md:max-w-[220px] md:whitespace-normal`} data-label="발주기관">
+                  {n.noticeInst ?? "-"}
                 </td>
-                <td className="px-4 py-2">
+                <td className={cardCell} data-label="배정예산">
+                  {formatWon(n.budgetAmount)}
+                </td>
+                <td className={`${cardCell} text-ink-mute`} data-label="등록일">
+                  {formatDate(n.registeredAt)}
+                </td>
+                <td className={`${cardCell} text-ink-mute`} data-label="의견마감일">
+                  {formatDate(n.opinionCloseAt)}
+                </td>
+                <td className={`${cardCell} text-ink-mute`} data-label="담당자">
+                  <span>
+                    {n.officialName ?? "-"}
+                    {n.officialTel && <span className="ml-1">({n.officialTel})</span>}
+                  </span>
+                </td>
+                <td className={cardCell} data-label="상태">
                   {n.bidNoticeNos.length > 0 ? (
                     <span className="rounded-full bg-semantic-success/15 px-2 py-0.5 text-xs font-medium text-semantic-success">
                       입찰공고 전환됨
@@ -210,8 +233,8 @@ export function PrespecNoticeList({
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr>
-                <td colSpan={10} className="px-4 py-6 text-center text-ink-mute">
+              <tr className={cardEmptyRow}>
+                <td colSpan={10} className={cardEmptyCell}>
                   {scrap.view === "scrap"
                     ? "스크랩한 사전규격이 없습니다."
                     : filter === "전체"

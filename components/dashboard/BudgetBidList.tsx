@@ -3,6 +3,15 @@
 import { useMemo, useState } from "react";
 import type { BudgetBid } from "@/lib/queries/budget";
 import { useScrapToolbar } from "@/lib/hooks/useScrapToolbar";
+import {
+  cardTable,
+  cardThead,
+  cardRow,
+  cardCell,
+  cardTitleCell,
+  cardEmptyRow,
+  cardEmptyCell,
+} from "@/components/dashboard/mobileCardTable";
 
 const BUSINESS_TYPE_LABEL: Record<BudgetBid["businessType"], string> = {
   cnstwk: "공사",
@@ -128,9 +137,9 @@ export function BudgetBidList({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-sm border border-hairline bg-canvas-cream">
-        <table className="w-full whitespace-nowrap text-sm">
-          <thead className="bg-[#f7f7f8] text-left text-ink-mute">
+      <div className="overflow-x-auto rounded-sm border border-hairline bg-canvas-cream max-md:overflow-visible max-md:border-0 max-md:bg-transparent">
+        <table className={cardTable}>
+          <thead className={cardThead}>
             <tr>
               <th className="w-8 px-4 py-2">
                 <input
@@ -152,9 +161,11 @@ export function BudgetBidList({
             {filtered.map((b) => (
               <tr
                 key={b.id}
-                className={`border-t border-hairline ${scrapedIds.has(b.id) ? "bg-canvas-lavender/20" : "odd:bg-white even:bg-[#f7f7f8]"}`}
+                className={cardRow(
+                  scrapedIds.has(b.id) ? "bg-canvas-lavender/20" : "odd:bg-white even:bg-[#f7f7f8] max-md:bg-white"
+                )}
               >
-                <td className="px-4 py-2">
+                <td className="px-4 py-2 max-md:px-0 max-md:py-0.5">
                   <input
                     type="checkbox"
                     checked={scrap.selected.has(b.id)}
@@ -162,13 +173,15 @@ export function BudgetBidList({
                     aria-label={`${b.title} 선택`}
                   />
                 </td>
-                <td className="px-4 py-2">
+                <td className={cardCell} data-label="키워드">
                   <span className="rounded-full bg-canvas-lavender px-2 py-0.5 text-xs font-medium text-primary">
                     {b.keyword}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-ink-mute">{BUSINESS_TYPE_LABEL[b.businessType]}</td>
-                <td className="px-4 py-2 whitespace-normal">
+                <td className={`${cardCell} text-ink-mute`} data-label="구분">
+                  {BUSINESS_TYPE_LABEL[b.businessType]}
+                </td>
+                <td className={cardTitleCell}>
                   {scrapedIds.has(b.id) && <span className="mr-1 text-primary">★</span>}
                   {b.detailUrl ? (
                     <a
@@ -183,19 +196,25 @@ export function BudgetBidList({
                     b.title
                   )}
                 </td>
-                <td className="px-4 py-2 text-ink-mute">{b.noticeInst ?? "-"}</td>
-                <td className="px-4 py-2">
-                  {formatWon(b.budgetAmount ?? b.presmptPrice)}
-                  {b.budgetAmount == null && b.presmptPrice != null && (
-                    <span className="ml-1 text-xs text-ink-mute">(추정가격)</span>
-                  )}
+                <td className={`${cardCell} text-ink-mute`} data-label="발주기관">
+                  {b.noticeInst ?? "-"}
                 </td>
-                <td className="px-4 py-2 text-ink-mute">{formatDate(b.noticeDate)}</td>
+                <td className={cardCell} data-label="예산금액">
+                  <span>
+                    {formatWon(b.budgetAmount ?? b.presmptPrice)}
+                    {b.budgetAmount == null && b.presmptPrice != null && (
+                      <span className="ml-1 text-xs text-ink-mute">(추정가격)</span>
+                    )}
+                  </span>
+                </td>
+                <td className={`${cardCell} text-ink-mute`} data-label="공고일">
+                  {formatDate(b.noticeDate)}
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-ink-mute">
+              <tr className={cardEmptyRow}>
+                <td colSpan={7} className={cardEmptyCell}>
                   {scrap.view === "scrap"
                     ? "스크랩한 공고가 없습니다."
                     : filter === "전체"
