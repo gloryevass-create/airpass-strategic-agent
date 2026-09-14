@@ -8,6 +8,8 @@ import { AI_MATERIAL_EMAIL_DRAFT_KEY, type AiMaterialEmailDraft } from "@/lib/ai
 import {
   DEFAULT_MATERIAL_EMAIL_SUBJECT,
   DEFAULT_MATERIAL_EMAIL_MESSAGE,
+  DEFAULT_MATERIAL_EMAIL_CLOSING,
+  DEFAULT_MATERIAL_EMAIL_SIGNOFF,
   DEFAULT_MATERIAL_EMAIL_HOMEPAGE,
   DEFAULT_MATERIAL_EMAIL_YOUTUBE,
   DEFAULT_MATERIAL_EMAIL_ADDRESS,
@@ -304,6 +306,8 @@ export function MaterialEmailForm({
   // 메일 하단 푸터 — 예전에는 템플릿에 하드코딩돼 있었는데 발송할 때마다 고칠 수
   // 있어야 한다는 요청(2026-09-14)으로 입력란으로 뺐다. 기본값은 그대로라 평소엔
   // 손대지 않아도 예전과 같은 메일이 나간다.
+  const [closing, setClosing] = useState(DEFAULT_MATERIAL_EMAIL_CLOSING);
+  const [signoff, setSignoff] = useState(DEFAULT_MATERIAL_EMAIL_SIGNOFF);
   const [homepage, setHomepage] = useState(DEFAULT_MATERIAL_EMAIL_HOMEPAGE);
   const [youtube, setYoutube] = useState(DEFAULT_MATERIAL_EMAIL_YOUTUBE);
   const [companyAddress, setCompanyAddress] = useState(DEFAULT_MATERIAL_EMAIL_ADDRESS);
@@ -370,6 +374,8 @@ export function MaterialEmailForm({
         ? { quoteNumber: selectedQuotation.quoteNumber, customerName: selectedQuotation.customerName, printUrl: "#" }
         : null,
       productLinks: productLinkLabels.map((p) => ({ label: p.label, link: p.matched ? "#" : null })),
+      closing,
+      signoff,
       homepage,
       youtube,
       companyAddress,
@@ -395,6 +401,8 @@ export function MaterialEmailForm({
     senderPhone,
     selectedQuotation,
     productLinkLabels,
+    closing,
+    signoff,
     homepage,
     youtube,
     companyAddress,
@@ -495,6 +503,37 @@ export function MaterialEmailForm({
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="보내드리는 자료에 대한 안내 문구를 입력하세요."
+          className="input"
+        />
+      </div>
+
+      <div className="field">
+        <label htmlFor="closing" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 500, color: "var(--color-text)" }}>
+          <NavIcon name="chat" width={14} height={14} stroke="var(--color-accent)" />
+          맺음말
+        </label>
+        <p className="text-muted" style={{ fontSize: 12, margin: "0 0 8px" }}>
+          자료 안내 뒤에 붙는 마무리 문장과 인사입니다. 비워두면 그 문단은 메일에서 빠집니다.
+        </p>
+        <textarea
+          id="closing"
+          name="closing"
+          rows={2}
+          value={closing}
+          onChange={(e) => setClosing(e.target.value)}
+          placeholder="검토 중 궁금하신 사항이나 추가로 필요하신 자료가 있으시면 편하게 말씀 부탁드립니다."
+          className="input"
+        />
+        <label htmlFor="signoff" style={{ fontSize: 12, marginTop: "var(--space-3)" }}>
+          맺음 인사 (마지막 줄은 굵게 표시됩니다)
+        </label>
+        <textarea
+          id="signoff"
+          name="signoff"
+          rows={2}
+          value={signoff}
+          onChange={(e) => setSignoff(e.target.value)}
+          placeholder={"감사합니다.\n주식회사 에어패스"}
           className="input"
         />
       </div>

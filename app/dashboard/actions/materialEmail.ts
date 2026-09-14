@@ -62,8 +62,8 @@ async function performSend(
     message: string;
     fileIds: string[];
     quotationId: string | null;
-    /** 메일 하단 푸터 — 폼에서 넘어온 값(AI 자동발송처럼 안 넘기면 기본값) */
-    footer?: { homepage: string; youtube: string; companyAddress: string };
+    /** 맺음말·하단 푸터 — 폼에서 넘어온 값(AI 자동발송처럼 안 넘기면 기본값) */
+    footer?: { closing: string; signoff: string; homepage: string; youtube: string; companyAddress: string };
   }
 ): Promise<SendMaterialEmailState> {
   const { recipients, subject, message, fileIds, quotationId, footer } = params;
@@ -149,6 +149,8 @@ async function performSend(
       videos,
       quotation,
       productLinks,
+      closing: footer?.closing,
+      signoff: footer?.signoff,
       homepage: footer?.homepage,
       youtube: footer?.youtube,
       companyAddress: footer?.companyAddress,
@@ -186,6 +188,8 @@ export async function sendMaterialEmailAction(
   const fileIds = formData.getAll("fileIds").map(String).filter(Boolean);
   const quotationId = String(formData.get("quotationId") ?? "").trim() || null;
   const footer = {
+    closing: String(formData.get("closing") ?? "").trim(),
+    signoff: String(formData.get("signoff") ?? "").trim(),
     homepage: String(formData.get("homepage") ?? "").trim(),
     youtube: String(formData.get("youtube") ?? "").trim(),
     companyAddress: String(formData.get("companyAddress") ?? "").trim(),

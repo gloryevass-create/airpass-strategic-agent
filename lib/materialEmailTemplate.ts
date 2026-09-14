@@ -14,6 +14,8 @@
 // 와이어프레임 룩은 충분히 남는다(사용자 확인 없이 내린 판단, 시각적으로 사소한 생략).
 import { QUOTATION_SUPPLIER } from "@/lib/quotationCompany";
 import {
+  DEFAULT_MATERIAL_EMAIL_CLOSING,
+  DEFAULT_MATERIAL_EMAIL_SIGNOFF,
   DEFAULT_MATERIAL_EMAIL_HOMEPAGE,
   DEFAULT_MATERIAL_EMAIL_YOUTUBE,
   DEFAULT_MATERIAL_EMAIL_ADDRESS,
@@ -87,6 +89,16 @@ export function matchProductMaterialFiles<T extends { id: string; name: string }
     const match = files.find((f) => keywords.every((k) => normalize(f.name).includes(normalize(k))));
     return { label, fileId: match ? match.id : null };
   });
+}
+
+// 맺음 인사는 마지막 줄(보내는 이름)만 굵게 — 기존 "감사합니다. / **주식회사
+// 에어패스**" 모양을 그대로 유지하면서 여러 줄로 고칠 수 있게 한 규칙이다.
+function signoffHtml(signoff: string): string {
+  const lines = signoff.split("\n");
+  const lastIndex = lines.reduce((acc, line, i) => (line.trim() ? i : acc), -1);
+  return lines
+    .map((line, i) => (i === lastIndex ? `<strong>${escapeHtml(line)}</strong>` : escapeHtml(line)))
+    .join("<br>");
 }
 
 // 푸터 입력란에는 "www.airpass.co.kr"처럼 스킴 없이 적는 게 자연스러워서, 링크로
@@ -205,14 +217,18 @@ export function buildMaterialEmailHtml(params: {
   videos: MaterialEmailFileLink[];
   quotation: MaterialEmailQuotation;
   productLinks: MaterialEmailProductLink[];
-  /** 하단 푸터 — 발송 폼에서 직접 고칠 수 있다(2026-09-14). 값을 안 넘기면
-   * 기존과 같은 기본값(lib/materialEmailDefaults.ts)을 쓴다. */
+  /** 맺음말·하단 푸터 — 발송 폼에서 직접 고칠 수 있다(2026-09-14). 값을 안
+   * 넘기면 기존과 같은 기본값(lib/materialEmailDefaults.ts)을 쓴다. */
+  closing?: string;
+  signoff?: string;
   homepage?: string;
   youtube?: string;
   companyAddress?: string;
 }): string {
   const { subject, message, senderName, senderTitle, senderEmail, senderPhone, logoUrl, documents, videos, quotation, productLinks } =
     params;
+  const closing = (params.closing ?? DEFAULT_MATERIAL_EMAIL_CLOSING).trim();
+  const signoff = (params.signoff ?? DEFAULT_MATERIAL_EMAIL_SIGNOFF).trim();
   const homepage = (params.homepage ?? DEFAULT_MATERIAL_EMAIL_HOMEPAGE).trim();
   const youtube = (params.youtube ?? DEFAULT_MATERIAL_EMAIL_YOUTUBE).trim();
   const companyAddress = (params.companyAddress ?? DEFAULT_MATERIAL_EMAIL_ADDRESS).trim();
@@ -253,13 +269,20 @@ export function buildMaterialEmailHtml(params: {
         ${quotationSectionHtml(quotation)}
         ${productLinksSectionHtml(productLinks, documents, videos)}
 
-        <p style="font-size:14.5px;color:${COLOR.neutral800};line-height:1.8;margin:0 0 20px;">
-          검토 중 궁금하신 사항이나 추가로 필요하신 자료가 있으시면 편하게 말씀 부탁드립니다.
-        </p>
-        <p style="font-size:14.5px;color:${COLOR.text};line-height:1.8;margin:0 0 30px;">
-          감사합니다.<br>
-          <strong>주식회사 에어패스</strong>
-        </p>
+        ${
+          closing
+            ? `<p style="font-size:14.5px;color:${COLOR.neutral800};line-height:1.8;margin:0 0 20px;">
+          ${escapeHtml(closing).replace(/\n/g, "<br>")}
+        </p>`
+            : ""
+        }
+        ${
+          signoff
+            ? `<p style="font-size:14.5px;color:${COLOR.text};line-height:1.8;margin:0 0 30px;">
+          ${signoffHtml(signoff)}
+        </p>`
+            : ""
+        }
 
         <div style="border:1px solid ${COLOR.divider};background:#ffffff;padding:20px 24px;margin-bottom:16px;">
           <div style="font-size:15px;font-weight:600;color:${COLOR.text};margin-bottom:8px;">${senderLine}</div>

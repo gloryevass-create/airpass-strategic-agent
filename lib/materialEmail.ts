@@ -43,7 +43,9 @@ export async function sendMaterialEmail(params: {
   videos: MaterialEmailFileLink[];
   quotation: MaterialEmailQuotation;
   productLinks: MaterialEmailProductLink[];
-  /** 메일 하단 푸터 — 발송 폼에서 고칠 수 있다(2026-09-14). 안 넘기면 기본값. */
+  /** 맺음말·하단 푸터 — 발송 폼에서 고칠 수 있다(2026-09-14). 안 넘기면 기본값. */
+  closing?: string;
+  signoff?: string;
   homepage?: string;
   youtube?: string;
   companyAddress?: string;
@@ -63,6 +65,8 @@ export async function sendMaterialEmail(params: {
     videos: params.videos,
     quotation: params.quotation,
     productLinks: params.productLinks,
+    closing: params.closing,
+    signoff: params.signoff,
     homepage: params.homepage,
     youtube: params.youtube,
     companyAddress: params.companyAddress,
