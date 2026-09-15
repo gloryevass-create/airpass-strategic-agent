@@ -1,17 +1,7 @@
 import { requireAuthedClient } from "@/lib/supabase/authed";
 import { CHANGELOG } from "@/lib/changelog";
 import { NavIcon } from "@/components/icons/NavIcon";
-
-function formatDateHeading(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00+09:00`);
-  return d.toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-    timeZone: "Asia/Seoul",
-  });
-}
+import { ChangelogList } from "@/components/dashboard/ChangelogList";
 
 export default async function ChangelogPage() {
   await requireAuthedClient();
@@ -29,26 +19,7 @@ export default async function ChangelogPage() {
         </p>
       </div>
 
-      <ol className="flex flex-col gap-4">
-        {CHANGELOG.map((entry) => (
-          <li key={entry.date} className="rounded-sm border border-hairline bg-canvas-cream p-4">
-            <h2 className="mb-2 text-sm font-semibold text-ink">{formatDateHeading(entry.date)}</h2>
-            <ul className="flex flex-col gap-1.5">
-              {entry.items.map((item, i) => (
-                <li key={i} className="flex gap-2 text-sm text-ink-mute">
-                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-mute" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </li>
-        ))}
-        {CHANGELOG.length === 0 && (
-          <li className="rounded-sm border border-hairline bg-canvas-cream p-6 text-center text-sm text-ink-mute">
-            아직 기록된 히스토리가 없습니다.
-          </li>
-        )}
-      </ol>
+      <ChangelogList entries={CHANGELOG} />
     </main>
   );
 }

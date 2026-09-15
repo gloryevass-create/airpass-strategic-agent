@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-09-15",
+    items: [
+      "업데이트 히스토리 화면에 월별 그룹 보기 추가 — 상단에 월별 이동 버튼(pill)이 생겨 누르면 해당 달 섹션으로 스크롤되고, 날짜별 항목은 그 달 섹션 안에 그대로 묶여 보임(Meeting Notes/AI Review의 월별 그룹 보기와 같은 방식)",
+      "자료메일발송 안내 내용에 URL을 그대로 적으면 자동으로 하이퍼링크로 바뀌도록 개선 — 문장 끝 마침표·쉼표·닫는 괄호 등은 링크에서 제외되고, 링크는 새 탭으로 열림",
+    ],
+  },
+  {
     date: "2026-09-14",
     items: [
       "SI Business·Cooperation·Marketing의 목록(칸반)/리스트 전환 버튼을 모바일에서도 다시 사용할 수 있게 복구 — 기존에는 모바일이면 리스트로 강제 고정하고 버튼을 숨겼었음",

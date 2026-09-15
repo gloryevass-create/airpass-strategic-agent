@@ -123,6 +123,37 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
+const URL_REGEX = /https?:\/\/[^\s<>"']+/g;
+// URL 뒤에 자연스럽게 붙는 문장부호(마침표·쉼표·닫는 괄호 등)는 링크에서 뺀다 —
+// 이걸 안 하면 "자료는 https://x.com/a 에서 확인하세요." 같은 문장에서 마침표까지
+// 링크에 포함돼 클릭 시 깨진 주소로 열린다.
+const TRAILING_PUNCTUATION = /[.,!?;:)\]}'"]+$/;
+
+// 안내 내용(message)에 URL을 그대로 적으면 자동으로 링크가 걸리게 한다
+// (2026-09-15, 사용자 요청) — escapeHtml처럼 그 자체로 안전한 이스케이프 함수라
+// URL이 아닌 나머지 텍스트는 그대로 escapeHtml을 거친다(주입 방지).
+function linkifyMessage(text: string): string {
+  let html = "";
+  let lastIndex = 0;
+  for (const match of text.matchAll(URL_REGEX)) {
+    const start = match.index;
+    let url = match[0];
+    let trailing = "";
+    const trailingMatch = url.match(TRAILING_PUNCTUATION);
+    if (trailingMatch) {
+      trailing = trailingMatch[0];
+      url = url.slice(0, -trailing.length);
+    }
+    if (!url) continue; // 문장부호만 매칭된 경우(사실상 없음) 방어
+    html += escapeHtml(text.slice(lastIndex, start));
+    html += `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color:${COLOR.accent700};text-decoration:underline;">${escapeHtml(url)}</a>`;
+    html += escapeHtml(trailing);
+    lastIndex = start + match[0].length;
+  }
+  html += escapeHtml(text.slice(lastIndex));
+  return html;
+}
+
 // Industry .card 스타일(각진 모서리, 헤어라인 테두리, 흰 배경)을 그대로 링크 한 줄에
 // 적용한다 — 원본은 색을 따로 안 주고 전역 a{color:accent-700} 규칙에 기대므로 여기도
 // 같은 톤(accent700)을 명시로 준다.
@@ -258,7 +289,7 @@ export function buildMaterialEmailHtml(params: {
 
       <div style="padding:8px 40px 44px;">
 
-        <p style="font-size:15px;color:${COLOR.text};line-height:1.7;margin:28px 0 32px;white-space:pre-wrap;">${escapeHtml(message)}</p>
+        <p style="font-size:15px;color:${COLOR.text};line-height:1.7;margin:28px 0 32px;white-space:pre-wrap;">${linkifyMessage(message)}</p>
 
         <div style="border:1px solid ${COLOR.divider};background:#ffffff;padding:22px 24px;margin-bottom:36px;">
           <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${COLOR.accent};margin-bottom:6px;">ABOUT AIRPASS</div>
