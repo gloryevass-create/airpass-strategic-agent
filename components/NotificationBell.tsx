@@ -144,7 +144,15 @@ export function NotificationBell({
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 flex max-h-[28rem] w-80 flex-col overflow-hidden rounded-md border border-hairline bg-background shadow-lg">
+        // 아이폰 Safari 같은 좁은 화면에서 이 버튼(bell)이 헤더 오른쪽 아이콘 묶음
+        // (알림 켜기·프로필·관리자·로그아웃) 중 맨 왼쪽에 있다 보니, 버튼 기준
+        // right-0(버튼 오른쪽 끝에 드롭다운 오른쪽 끝을 맞추고 왼쪽으로 폭 320px
+        // 만큼 펼침)로는 화면 왼쪽 밖으로 잘려 나갔다(2026-09-15, 사용자 아이폰
+        // 캡처 확인). 모바일에서는 버튼 위치와 무관하게 뷰포트 좌우에 16px
+        // 여백만 두는 fixed 패널로 바꿔 절대 화면 밖으로 안 나가게 하고,
+        // md 이상(공간이 충분한 화면)에서는 기존 버튼-기준 absolute 배치를
+        // 그대로 유지한다.
+        <div className="fixed inset-x-4 top-[77px] z-20 flex max-h-[28rem] flex-col overflow-hidden rounded-md border border-hairline bg-background shadow-lg md:absolute md:inset-x-auto md:right-0 md:top-full md:mt-1 md:w-80">
           <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
             <span className="text-sm font-semibold text-ink">알림</span>
             {unread.length > 0 && (
