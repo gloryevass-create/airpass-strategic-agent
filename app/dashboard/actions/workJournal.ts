@@ -110,6 +110,21 @@ export async function createWorkJournalEntry(
     });
   }
 
+  // 워크스페이스 다른 게시판(Memo Board/Meeting Notes 등)과 마찬가지로 새
+  // 업무일지 작성을 팀 알림 피드에 남긴다(2026-09-16, 사용자 확인 — Work
+  // Journal만 알림이 빠져있던 걸 발견). 작성자는 로그인한 본인이 아니라 폼에서
+  // 고른 author_name을 그대로 쓴다(다른 팀원 몫으로 대신 기록하는 경우가
+  // 있어 이게 더 정확 — 목록 상단 작성자 필터와 같은 값). 알림을 누르면
+  // 목록이 아니라 이 일지가 바로 열리도록 ?open=id를 붙인다
+  // (IndustryWorkJournalBoard.tsx가 마운트 시 읽음).
+  const preview = fields.content.length > 40 ? `${fields.content.slice(0, 40)}...` : fields.content;
+  await supabase.from("notifications").insert({
+    type: "work_journal",
+    title: preview,
+    message: `${fields.author_name}님이 새 업무일지를 작성했습니다.`,
+    link: `${PATH}?open=${entry.id}`,
+  });
+
   revalidatePath(PATH);
   return undefined;
 }

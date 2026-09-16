@@ -160,17 +160,35 @@ async function performSend(
     return { error: `메일 발송 실패: ${e instanceof Error ? e.message : "알 수 없는 오류"}` };
   }
 
-  await supabase.from("material_email_logs").insert({
-    sender_id: user.id,
-    sender_email: senderEmail,
-    recipient_emails: recipients,
-    subject,
-    message,
-    file_names: files.map((f) => f.name),
-    file_links: files.map((f) => f.link),
-    quotation_id: quotation?.id ?? null,
-    quotation_quote_number: quotation?.quoteNumber ?? null,
-  });
+  const { data: log } = await supabase
+    .from("material_email_logs")
+    .insert({
+      sender_id: user.id,
+      sender_email: senderEmail,
+      recipient_emails: recipients,
+      subject,
+      message,
+      file_names: files.map((f) => f.name),
+      file_links: files.map((f) => f.link),
+      quotation_id: quotation?.id ?? null,
+      quotation_quote_number: quotation?.quoteNumber ?? null,
+    })
+    .select("id")
+    .single();
+
+  // 워크스페이스 다른 게시판들과 마찬가지로 발송 사실을 팀 알림 피드에
+  // 남긴다(2026-09-16, 사용자 확인 — 자료메일발송만 알림이 빠져있던 걸
+  // 발견). log가 있어야 미리보기를 열 수 있으니, 실패했으면(드문 경우)
+  // 알림 없이 조용히 넘어간다 — 이미 메일 자체는 발송 완료됐으므로 여기서
+  // 에러로 되돌리면 안 된다.
+  if (log) {
+    await supabase.from("notifications").insert({
+      type: "material_email",
+      title: subject,
+      message: `${senderName}님이 ${recipients.join(", ")}에게 자료를 발송했습니다.`,
+      link: `${PATH}?open=${log.id}`,
+    });
+  }
 
   revalidatePath(PATH);
   return { success: true };

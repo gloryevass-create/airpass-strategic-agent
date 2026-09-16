@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { WorkJournalEntry } from "@/lib/queries/workJournal";
 import {
   createWorkJournalEntry,
@@ -344,6 +345,21 @@ export function IndustryWorkJournalBoard({
   );
 
   const editingEntry = editingId && editingId !== "new" ? (entries.find((e) => e.id === editingId) ?? null) : null;
+
+  // 알림벨/푸시 알림에서 "?open=id"로 들어오면 목록만 보여주지 말고 그 일지를
+  // 바로 연다(2026-09-16, 사용자 요청 — app/dashboard/actions/workJournal.ts가
+  // 알림 링크에 이 쿼리를 실어 보낸다). 연 뒤에는 쿼리를 지워서 새로고침해도
+  // 같은 폼이 다시 안 뜨게 한다.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    if (entries.some((e) => e.id === openId)) setEditingId(openId);
+    router.replace("/dashboard/work-journal");
+  }, [searchParams, entries, router]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <div className="industry-theme" style={{ minHeight: "100vh", background: "#ffffff" }}>

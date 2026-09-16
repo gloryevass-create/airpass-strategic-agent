@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getSentMaterialEmailHtml } from "@/app/dashboard/actions/materialEmail";
 
 // MaterialEmailForm.tsx의 "미리보기" 다이얼로그와 같은 UX(사용자 요청, 2026-09-03 —
@@ -28,6 +29,21 @@ export function SentMaterialEmailPreviewButton({ logId, subject }: { logId: stri
       setLoading(false);
     }
   }
+
+  // 알림벨/푸시 알림에서 "?open=logId"로 들어오면 이력 목록만 보여주지 말고
+  // 이 발송 건의 미리보기를 바로 연다(2026-09-16, 사용자 요청 —
+  // app/dashboard/actions/materialEmail.ts가 알림 링크에 이 쿼리를 실어
+  // 보낸다). 행마다 이 컴포넌트가 하나씩 있어 자기 logId와 일치할 때만 연다.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (searchParams.get("open") !== logId) return;
+    handleOpen();
+    router.replace("/dashboard/material-email");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, logId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <>

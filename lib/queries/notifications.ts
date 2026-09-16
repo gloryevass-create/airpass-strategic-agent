@@ -16,7 +16,10 @@ export type NotificationType =
   | "marketing"
   | "quotation"
   | "meeting_note"
-  | "ai_review";
+  | "ai_review"
+  | "ai_tool"
+  | "work_journal"
+  | "material_email";
 
 export type Notification = {
   id: string;

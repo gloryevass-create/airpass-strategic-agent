@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuthedClient } from "@/lib/supabase/authed";
+import { formatMember } from "@/lib/formatMember";
 
 const PATH = "/dashboard/ai-tools";
 
@@ -34,14 +35,31 @@ export async function createAiTool(_prevState: AiToolFormState, formData: FormDa
   if (!title) return { error: "제목을 입력하세요." };
   if (!url) return { error: "링크를 입력하세요." };
 
-  const { error } = await supabase.from("ai_tools").insert({
-    author_id: user.id,
-    author_email: user.email ?? "",
+  const { data: inserted, error } = await supabase
+    .from("ai_tools")
+    .insert({
+      author_id: user.id,
+      author_email: user.email ?? "",
+      title,
+      url,
+      description,
+    })
+    .select("id")
+    .single();
+  if (error || !inserted) return { error: `저장 실패: ${error?.message ?? "알 수 없는 오류"}` };
+
+  // 워크스페이스 다른 게시판(Memo Board/Meeting Notes/AI Review 등)과 마찬가지로
+  // 새 항목 등록을 팀 알림 피드에 남긴다(2026-09-16, 사용자 확인 — AI HUB만
+  // 알림이 빠져있던 걸 발견). 알림을 누르면 목록이 아니라 이 도구 상세가
+  // 바로 열리도록 ?open=id를 붙인다(AiToolsBoard.tsx가 마운트 시 읽음).
+  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
+  const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
+  await supabase.from("notifications").insert({
+    type: "ai_tool",
     title,
-    url,
-    description,
+    message: `${actor}님이 새 AI 도구를 등록했습니다.`,
+    link: `${PATH}?open=${inserted.id}`,
   });
-  if (error) return { error: `저장 실패: ${error.message}` };
 
   revalidatePath(PATH);
   return undefined;
