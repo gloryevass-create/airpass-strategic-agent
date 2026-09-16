@@ -54,7 +54,7 @@ export default async function BlogPage() {
 
   return (
     <div className="industry-theme" style={{ minHeight: "100vh", background: "#ffffff" }}>
-      <div style={{ padding: "var(--space-8) var(--space-6)", maxWidth: 1400, margin: 0 }}>
+      <div className="marketing-page-content" style={{ padding: "var(--space-8) var(--space-6)", maxWidth: 1400, margin: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />

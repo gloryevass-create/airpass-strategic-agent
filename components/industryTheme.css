@@ -338,6 +338,15 @@
     padding-left: var(--space-2) !important;
     padding-right: var(--space-2) !important;
   }
+  /* 마케팅분석(네이버키워드/네이버블로그/유튜브채널분석)도 차트·표 위주 화면이라
+     좁은 화면에서는 좌우 여백이 커 보인다는 피드백(2026-09-16)으로 Calendar와
+     같은 값으로 줄인다 — Business 계열(board-page-content)은 반대로 "답답해
+     보인다"는 피드백으로 그대로 두기로 했던 것과는 다른 결정(화면 성격이
+     달라 페이지 그룹마다 클래스를 분리해 각자 다르게 정할 수 있게 함). */
+  .industry-theme .marketing-page-content {
+    padding-left: var(--space-2) !important;
+    padding-right: var(--space-2) !important;
+  }
   /* 환경설정 바(기본값 저장 등)는 모바일에서 화면을 너무 차지해 완전히 숨긴다 —
      Reset/Save as defaults 자체를 못 쓰게 되지만, 이 설정은 컴퓨터에서 한 번
      정해두면 되는 값이라 모바일 전용 UI를 따로 만들 필요는 없다고 판단(사용자
