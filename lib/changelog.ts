@@ -13,6 +13,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       "Calendar \"오늘\" 표시가 한국 시간 자정~오전 9시 사이에는 하루 전 날짜로 잘못 표시되던 버그 수정 — new Date().toISOString()가 항상 UTC 기준이라 그 9시간 동안은 실제로는 다음날인데 전날로 계산됐음(브라우저 로컬 시간대와 무관하게 발생). 캘린더 페이지 진입 시 기본으로 보여주는 월도 같은 원인으로 자정 직후엔 지난달이 뜨던 것까지 함께 수정",
       "마케팅분석(네이버키워드/네이버블로그/유튜브채널분석) 모바일 좌우 여백을 Calendar와 같은 수준으로 축소 — 차트·표 위주 화면이라 좁은 화면에서 여백이 커 보인다는 피드백",
+      "Calendar를 제외한 모든 메뉴(Business/Cooperation/Marketing/To-Do/Memo Board/Work Journal/Meeting Notes/AI HUB/제조사 관리/산출내역 관리/제품 카탈로그/자료메일발송/관리자/마케팅분석)의 모바일 좌우 여백을 10px로 통일 — 2026-09-12에 \"답답해 보인다\"며 되돌렸던 것과 반대로, 이번엔 더 좁혀 달라는 요청",
     ],
   },
   {

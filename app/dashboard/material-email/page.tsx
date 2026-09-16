@@ -79,7 +79,7 @@ export default async function MaterialEmailPage() {
 
   return (
     <div className="industry-theme" style={{ minHeight: "100vh", background: "#ffffff" }}>
-      <div style={{ padding: "var(--space-8) var(--space-6)", maxWidth: 900, margin: 0 }}>
+      <div className="board-page-content" style={{ padding: "var(--space-8) var(--space-6)", maxWidth: 900, margin: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.5 6.5L7.9 13a2.5 2.5 0 0 0 3.5 3.5l7-7a4.2 4.2 0 0 0-6-6l-7 7a6 6 0 0 0 8.5 8.5" />
