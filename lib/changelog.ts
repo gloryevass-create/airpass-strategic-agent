@@ -9,6 +9,12 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-09-16",
+    items: [
+      "Calendar \"오늘\" 표시가 한국 시간 자정~오전 9시 사이에는 하루 전 날짜로 잘못 표시되던 버그 수정 — new Date().toISOString()가 항상 UTC 기준이라 그 9시간 동안은 실제로는 다음날인데 전날로 계산됐음(브라우저 로컬 시간대와 무관하게 발생). 캘린더 페이지 진입 시 기본으로 보여주는 월도 같은 원인으로 자정 직후엔 지난달이 뜨던 것까지 함께 수정",
+    ],
+  },
+  {
     date: "2026-09-15",
     items: [
       "업데이트 히스토리 화면에 월별 그룹 보기 추가 — 상단에 월별 이동 버튼(pill)이 생겨 누르면 해당 달 섹션으로 스크롤되고, 날짜별 항목은 그 달 섹션 안에 그대로 묶여 보임(Meeting Notes/AI Review의 월별 그룹 보기와 같은 방식)",

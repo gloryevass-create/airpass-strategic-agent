@@ -647,7 +647,12 @@ export function IndustryEventCalendar({
   const [cursor, setCursor] = useState(initialCursor);
   const [editing, setEditing] = useState<TeamEventV2 | "new" | null>(null);
   const [newEventDate, setNewEventDate] = useState<string | null>(null);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // new Date().toISOString()는 항상 UTC 기준이라, 한국 자정~오전 9시 사이에는
+  // 하루 전 날짜가 나와 "오늘" 표시가 하루 밀리는 버그가 있었다(2026-09-16,
+  // 사용자 확인 — 이 앱은 항상 KST 기준이므로 브라우저 로컬 시간대와 무관하게
+  // KST로 계산해야 한다). 위 toKstDateStr과 같은 방식(+9시간 후 UTC로 다시
+  // 뽑기)으로 오늘 날짜를 구한다.
+  const todayStr = toKstDateStr(new Date().toISOString());
 
   // 구글 연동 후 돌아왔을 때만 잠깐 보여줄 안내문 — URL의 googleConnected/
   // googleError 쿼리는 한 번 보여준 뒤 지운다(계속 남아있으면 새로고침·다른

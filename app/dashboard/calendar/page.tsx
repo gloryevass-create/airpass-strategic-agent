@@ -7,13 +7,18 @@ import { IndustryEventCalendar } from "@/components/dashboard/IndustryEventCalen
 
 type SearchParams = Promise<{ month?: string; day?: string; googleConnected?: string; googleError?: string }>;
 
-function currentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+// Vercel 서버는 UTC로 돈다 — new Date()의 로컬 게터(getFullYear/getMonth 등)를
+// 그대로 쓰면 한국 자정~오전 9시 사이에는 하루/한 달 전 값이 나와 캘린더 기본
+// 진입 월·오늘 표시가 어긋난다(2026-09-16, 사용자 확인 — components/dashboard/
+// IndustryEventCalendar.tsx의 "오늘" 표시와 같은 원인). Date.now()에 9시간을
+// 더한 뒤 toISOString으로 뽑으면 실행 환경의 시간대 설정과 무관하게 항상 KST
+// 날짜가 나온다.
+function currentDay() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-function currentDay() {
-  return new Date().toISOString().slice(0, 10);
+function currentMonth() {
+  return currentDay().slice(0, 7);
 }
 
 export default async function Events2Page({ searchParams }: { searchParams: SearchParams }) {
