@@ -937,6 +937,7 @@ export function IndustryCooperationBoard({ projects, members }: { projects: Coop
       </p>
 
       <div
+        className="stats-strip"
         style={{
           display: "flex",
           alignItems: "baseline",

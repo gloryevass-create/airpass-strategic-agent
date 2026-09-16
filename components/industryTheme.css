@@ -347,6 +347,20 @@
     padding-left: 10px !important;
     padding-right: 10px !important;
   }
+  /* SI Business/Cooperation/Marketing 상단 "전체 | 시작 전 진행 중 완료 보류
+     실패" 요약 줄(.stats-strip) — flexWrap:wrap 그대로 두면 좁은 화면에서
+     항목이 두 줄로 넘어간다(2026-09-16, 사용자 스크린샷 확인: "실패"가
+     다음 줄로 밀림). 한 줄에 다 안 들어가도 줄바꿈 대신 가로 스크롤되게
+     해서 항상 한 줄로 보이게 한다 — 인라인 flexWrap:"wrap"을 이겨야 해서
+     !important 필요. */
+  .industry-theme .stats-strip {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .industry-theme .stats-strip > * {
+    flex-shrink: 0;
+  }
   /* 환경설정 바(기본값 저장 등)는 모바일에서 화면을 너무 차지해 완전히 숨긴다 —
      Reset/Save as defaults 자체를 못 쓰게 되지만, 이 설정은 컴퓨터에서 한 번
      정해두면 되는 값이라 모바일 전용 UI를 따로 만들 필요는 없다고 판단(사용자

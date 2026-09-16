@@ -936,6 +936,7 @@ export function IndustryMarketingBoard({ tasks, members }: { tasks: MarketingTas
       </p>
 
       <div
+        className="stats-strip"
         style={{
           display: "flex",
           alignItems: "baseline",

@@ -1064,6 +1064,7 @@ export function IndustryBusinessBoard({
       </p>
 
       <div
+        className="stats-strip"
         style={{
           display: "flex",
           alignItems: "baseline",
