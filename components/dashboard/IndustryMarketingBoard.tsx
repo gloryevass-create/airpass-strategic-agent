@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type DragEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { NavIcon, type IconName } from "@/components/icons/NavIcon";
 import type { MarketingTask, MarketingTaskHistoryEntry } from "@/lib/queries/marketingTasks";
 import {
@@ -796,6 +797,20 @@ export function IndustryMarketingBoard({ tasks, members }: { tasks: MarketingTas
   const [view, setView] = useState<"kanban" | "list">(HARD_DEFAULTS.view);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // 알림벨/푸시 알림에서 "?open=id"로 들어오면 목록만 보여주지 말고 그 업무의
+  // 상세 팝업을 바로 연다(2026-09-16, 사용자 요청 — app/dashboard/actions/
+  // marketingTasks.ts가 알림 링크에 이 쿼리를 실어 보낸다). 연 뒤에는 쿼리를
+  // 지워서 새로고침해도 같은 팝업이 다시 안 뜨게 한다.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    if (tasks.some((t) => t.id === openId)) setEditingId(openId);
+    router.replace("/dashboard/marketing-tasks");
+  }, [searchParams, tasks, router]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
   const draggingIdRef = useRef<string | null>(null);
   const [, startTransition] = useTransition();

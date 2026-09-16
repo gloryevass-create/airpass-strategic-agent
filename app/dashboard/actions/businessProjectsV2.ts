@@ -69,7 +69,7 @@ export async function createBusinessProjectV2(
   const fields = fieldsFromForm(formData);
   if (!fields.title) return { error: "사업명을 입력하세요." };
 
-  const { error } = await supabase.from("business_projects_v2").insert(fields);
+  const { data: inserted, error } = await supabase.from("business_projects_v2").insert(fields).select("id").single();
   if (error) return { error: `저장 실패: ${error.message}` };
 
   const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
@@ -78,7 +78,12 @@ export async function createBusinessProjectV2(
     type: "business",
     title: fields.title,
     message: `${actor}님이 새 SI Business 항목을 등록했습니다.`,
-    link: PATH,
+    // 알림을 눌렀을 때 목록이 아니라 이 사업의 상세 팝업이 바로 열리도록
+    // ?open=id를 붙인다(2026-09-16, 사용자 요청) — IndustryBusinessBoard.tsx가
+    // 마운트 시 이 쿼리를 읽어 editingId를 채운다. 두 화면이 같은 데이터를
+    // 보므로 새로 그린 화면(PATH_V2_REDESIGN) 쪽으로 보낸다(사이드바 기본
+    // 메뉴가 이쪽이라 — 옛 /dashboard/business2는 그대로 둠).
+    link: `${PATH_V2_REDESIGN}?open=${inserted.id}`,
   });
 
   revalidateBusinessPaths();

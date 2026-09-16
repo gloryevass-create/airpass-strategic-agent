@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { AnimatePresence, Reorder, useDragControls } from "framer-motion";
 import type { Quotation, QuotationItem } from "@/lib/queries/quotations";
@@ -978,6 +979,20 @@ export function QuotationBoard({
   businessProjects: { id: string; title: string }[];
 }) {
   const [editingId, setEditingId] = useState<string | null | "new">(null);
+  // 알림벨/푸시 알림에서 "?open=id"로 들어오면 목록만 보여주지 말고 그
+  // 산출내역의 상세 팝업을 바로 연다(2026-09-16, 사용자 요청 — app/dashboard/
+  // actions/quotations.ts가 알림 링크에 이 쿼리를 실어 보낸다). 연 뒤에는
+  // 쿼리를 지워서 새로고침해도 같은 팝업이 다시 안 뜨게 한다.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    if (quotations.some((q) => q.id === openId)) setEditingId(openId);
+    router.replace("/dashboard/quotations");
+  }, [searchParams, quotations, router]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const [search, setSearch] = useState("");
   const editingQuotation =
     editingId && editingId !== "new" ? (quotations.find((q) => q.id === editingId) ?? null) : null;

@@ -15,6 +15,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "마케팅분석(네이버키워드/네이버블로그/유튜브채널분석) 모바일 좌우 여백을 Calendar와 같은 수준으로 축소 — 차트·표 위주 화면이라 좁은 화면에서 여백이 커 보인다는 피드백",
       "Calendar를 제외한 모든 메뉴(Business/Cooperation/Marketing/To-Do/Memo Board/Work Journal/Meeting Notes/AI HUB/제조사 관리/산출내역 관리/제품 카탈로그/자료메일발송/관리자/마케팅분석)의 모바일 좌우 여백을 10px로 통일 — 2026-09-12에 \"답답해 보인다\"며 되돌렸던 것과 반대로, 이번엔 더 좁혀 달라는 요청",
       "SI Business·Cooperation·Marketing 상단 \"전체 | 시작 전 진행 중 완료 보류 실패\" 요약 줄이 모바일 좁은 화면에서 두 줄로 넘어가던 것을 한 줄 유지 + 가로 스크롤로 변경",
+      "SI Business·Cooperation·Marketing·Calendar·산출내역 새 항목 알림(알림벨/브라우저 푸시)을 누르면 이제 목록이 아니라 그 항목의 상세 팝업이 바로 열림 — 이 다섯 화면은 개별 페이지 없이 팝업으로 상세를 보여주는 구조라, 알림 링크에 ?open=id(Calendar는 ?month/day/eventId)를 실어 보내고 화면이 마운트될 때 그 쿼리를 읽어 자동으로 팝업을 연 뒤 URL은 정리함. Memo Board/Meeting Notes/AI Review/스크랩 알림은 이미 개별 주소가 있어 그대로 동작",
     ],
   },
   {

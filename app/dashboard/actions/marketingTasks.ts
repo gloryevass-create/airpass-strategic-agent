@@ -47,7 +47,7 @@ export async function createMarketingTask(
   const fields = fieldsFromForm(formData);
   if (!fields.title) return { error: "업무명을 입력하세요." };
 
-  const { error } = await supabase.from("marketing_tasks").insert(fields);
+  const { data: inserted, error } = await supabase.from("marketing_tasks").insert(fields).select("id").single();
   if (error) return { error: `저장 실패: ${error.message}` };
 
   const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
@@ -56,7 +56,10 @@ export async function createMarketingTask(
     type: "marketing",
     title: fields.title,
     message: `${actor}님이 새 마케팅 업무를 등록했습니다.`,
-    link: PATH,
+    // 알림을 누르면 목록이 아니라 이 업무의 상세 팝업이 바로 열리게 ?open=id를
+    // 붙인다(2026-09-16, 사용자 요청) — IndustryMarketingBoard.tsx가 마운트
+    // 시 이 쿼리를 읽어 editingId를 채운다.
+    link: `${PATH}?open=${inserted.id}`,
   });
 
   revalidatePath(PATH);

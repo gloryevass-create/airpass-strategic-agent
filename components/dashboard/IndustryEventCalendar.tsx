@@ -624,6 +624,7 @@ export function IndustryEventCalendar({
   events,
   month,
   initialCursor,
+  initialEventId,
   members,
   currentUserId,
   googleConnection,
@@ -634,6 +635,7 @@ export function IndustryEventCalendar({
   events: TeamEventV2[];
   month: string;
   initialCursor: string;
+  initialEventId: string | null;
   members: string[];
   currentUserId: string;
   googleConnection: GoogleCalendarConnection | null;
@@ -646,6 +648,20 @@ export function IndustryEventCalendar({
   const [showGoogleEvents, setShowGoogleEvents] = useState(HARD_DEFAULT_SHOW_GOOGLE_EVENTS);
   const [cursor, setCursor] = useState(initialCursor);
   const [editing, setEditing] = useState<TeamEventV2 | "new" | null>(null);
+  // 알림벨/푸시 알림에서 "?eventId=..."로 들어오면 그 일정 상세 팝업을 바로
+  // 연다(2026-09-16, 사용자 요청 — app/dashboard/actions/eventsV2.ts가 알림
+  // 링크에 month/day/eventId를 함께 실어 보낸다, page.tsx가 month/day로 그
+  // 달의 events를 미리 불러온 상태로 넘어온다). 연 뒤에는 eventId만 지우고
+  // month/day는 유지한다.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!initialEventId) return;
+    const found = events.find((e) => e.id === initialEventId);
+    if (found) setEditing(found);
+    router.replace(`/dashboard/calendar?month=${month}&day=${initialCursor}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEventId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const [newEventDate, setNewEventDate] = useState<string | null>(null);
   // new Date().toISOString()는 항상 UTC 기준이라, 한국 자정~오전 9시 사이에는
   // 하루 전 날짜가 나와 "오늘" 표시가 하루 밀리는 버그가 있었다(2026-09-16,

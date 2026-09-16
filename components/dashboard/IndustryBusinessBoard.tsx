@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type DragEvent } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { NavIcon, type IconName } from "@/components/icons/NavIcon";
 import type { BusinessProjectV2, BusinessProjectV2HistoryEntry } from "@/lib/queries/businessProjectsV2";
 import type { Quotation } from "@/lib/queries/quotations";
@@ -933,6 +934,21 @@ export function IndustryBusinessBoard({
       setView(saved.view);
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // 알림벨/푸시 알림에서 "?open=id"로 들어오면 목록만 보여주지 말고 그 사업의
+  // 상세 팝업을 바로 연다(2026-09-16, 사용자 요청 — app/dashboard/actions/
+  // businessProjectsV2.ts가 알림 링크에 이 쿼리를 실어 보낸다). 연 뒤에는
+  // 쿼리를 지워서 새로고침해도 같은 팝업이 다시 안 뜨게 한다.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    if (projects.some((p) => p.id === openId)) setEditingId(openId);
+    router.replace("/dashboard/business");
+  }, [searchParams, projects, router]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // 2026-09-12에는 모바일에서 view를 "list"로 강제하고 전환 버튼도 숨겼었는데,

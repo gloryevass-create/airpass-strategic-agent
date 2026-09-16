@@ -49,7 +49,7 @@ export async function createCooperationProject(
   const fields = fieldsFromForm(formData);
   if (!fields.title) return { error: "협업 이름을 입력하세요." };
 
-  const { error } = await supabase.from("cooperation_projects").insert(fields);
+  const { data: inserted, error } = await supabase.from("cooperation_projects").insert(fields).select("id").single();
   if (error) return { error: `저장 실패: ${error.message}` };
 
   const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
@@ -58,7 +58,10 @@ export async function createCooperationProject(
     type: "cooperation",
     title: fields.title,
     message: `${actor}님이 새 협업 항목을 등록했습니다.`,
-    link: PATH,
+    // 알림을 누르면 목록이 아니라 이 항목의 상세 팝업이 바로 열리게 ?open=id를
+    // 붙인다(2026-09-16, 사용자 요청) — IndustryCooperationBoard.tsx가 마운트
+    // 시 이 쿼리를 읽어 editingId를 채운다.
+    link: `${PATH}?open=${inserted.id}`,
   });
 
   revalidatePath(PATH);

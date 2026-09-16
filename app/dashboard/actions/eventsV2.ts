@@ -8,6 +8,14 @@ import { insertGoogleCalendarEvent, updateGoogleCalendarEvent, deleteGoogleCalen
 
 const PATH = "/dashboard/calendar";
 
+// 알림 링크에 그 일정이 속한 월/날짜를 함께 실어 보내려고 KST 날짜 문자열로
+// 바꾼다(2026-09-16) — date_start는 UTC ISO라 그대로 slice하면 하루 밀릴 수
+// 있다(Calendar "오늘" 표시 버그와 같은 원인, components/dashboard/
+// IndustryEventCalendar.tsx::toKstDateStr 참고).
+function kstDateStrFromIso(iso: string): string {
+  return new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export type TeamEventV2FormState = { error?: string } | undefined;
 
 function text(formData: FormData, key: string): string | null {
@@ -130,11 +138,16 @@ export async function createTeamEventV2(
 
   const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
   const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
+  // 알림을 누르면 목록만 뜨는 게 아니라 이 일정이 있는 달로 이동해 상세
+  // 팝업까지 바로 열리게 month/day/eventId를 함께 실어 보낸다(2026-09-16,
+  // 사용자 요청) — IndustryEventCalendar.tsx가 마운트 시 이 쿼리를 읽어
+  // editing을 채운다.
+  const day = kstDateStrFromIso(fields.date_start);
   await supabase.from("notifications").insert({
     type: "event",
     title: fields.title,
     message: `${actor}님이 새 일정을 등록했습니다.`,
-    link: PATH,
+    link: `${PATH}?month=${day.slice(0, 7)}&day=${day}&eventId=${inserted.id}`,
   });
 
   revalidatePath(PATH);

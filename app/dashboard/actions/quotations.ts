@@ -174,7 +174,10 @@ export async function createQuotation(
     type: "quotation",
     title: `${quoteNumber} (${customerName})`,
     message: `${actor}님이 새 산출내역을 작성했습니다.`,
-    link: PATH,
+    // 알림을 누르면 목록이 아니라 이 산출내역의 상세 팝업이 바로 열리게
+    // ?open=id를 붙인다(2026-09-16, 사용자 요청) — QuotationBoard.tsx가
+    // 마운트 시 이 쿼리를 읽어 editingId를 채운다.
+    link: `${PATH}?open=${quotation.id}`,
   });
 
   revalidatePath(PATH);
