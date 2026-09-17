@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { hashApiToken } from "@/lib/personalApiToken";
 import { getTeamEventsV2InRange } from "@/lib/queries/eventsV2";
 import { getGoogleCalendarConnection, getMyGoogleCalendarEvents } from "@/lib/queries/googleCalendar";
+import { addDaysToDateStr, kstDayEndIso, kstDayStartIso, todayKstDateStr } from "@/lib/kstDate";
 
 // 개인 API 토큰(0074)으로 인증하는 외부 캘린더 브리핑 API — Claude 등 외부
 // 에이전트가 Authorization: Bearer <토큰>으로 호출하면, 그 토큰을 발급한
@@ -15,25 +16,6 @@ import { getGoogleCalendarConnection, getMyGoogleCalendarEvents } from "@/lib/qu
 //
 // 요약·문장 생성은 하지 않는다(사용자 확인, 2026-09-13) — 이 API를 호출하는
 // Claude/외부 에이전트가 원본 일정 목록을 보고 알아서 브리핑 문장을 만든다.
-
-function kstDayStartIso(dateStr: string): string {
-  return new Date(`${dateStr}T00:00:00+09:00`).toISOString();
-}
-
-function kstDayEndIso(dateStr: string): string {
-  return new Date(`${dateStr}T23:59:59+09:00`).toISOString();
-}
-
-function todayKstDateStr(): string {
-  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  return kstNow.toISOString().slice(0, 10);
-}
-
-function addDaysToDateStr(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T00:00:00+09:00`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 const DEFAULT_RANGE_DAYS = 14;
 const MAX_RANGE_DAYS = 90;

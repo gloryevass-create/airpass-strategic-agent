@@ -357,6 +357,57 @@ URL 발급이 필요한데 그마저도 새 첨부는 거의 다 드라이브를
   prop). 주차 라벨도 수동 폼과 동일하게 `weekLabelFromDate()`로 날짜에서
   자동 생성한다.
 
+## Today Issue
+
+`/dashboard/today-issue`(사이드바 맨 위) — 어제 무슨 일이 있었고, 오늘 뭐가 있고,
+내일 뭘 준비해야 하는지를 한 화면에 모은 브리핑(2026-09-17). 기능이 늘면서
+"무슨 일이 있었는지" 알려면 Calendar·3개 보드·영업지원·기록·AI HUB를 하나씩
+돌아다녀야 했고, 알림벨은 **새 항목 등록만** 잡고(상태 변경·수정은 안 잡음)
+30건으로 잘려 그 역할을 못 했다.
+
+- **데이터는 3일치를 한 번에 받는다**(`lib/queries/todayIssue.ts::getTodayIssues`)
+  — 탭(어제/오늘/내일)을 누를 때마다 서버를 왕복하지 않도록 어제 00:00 KST ~
+  모레 00:00 KST를 한 번에 조회하고 JS에서 KST 날짜별로 쪼갠다. 하루치만 받는
+  것과 쿼리 수가 같고(범위만 넓음), 탭 전환은 클라이언트 상태라 즉시 반응한다
+  (`components/dashboard/TodayIssueBoard.tsx`).
+- 날짜마다 **일정 / 기한 / 변동** 세 버킷을 만든다. 세 날짜가 같은 코드 경로를
+  쓰고, 내일 칸은 "변동"이 자연히 비는 것으로 처리한다(특수 분기 없음).
+- **기존 보드 쿼리 함수(`getBusinessProjectsV2` 등)를 재사용하지 않는다** — 그쪽은
+  댓글·히스토리·첨부·URL까지 통째로 읽고 기간 필터가 없어 이 용도에는 과하다.
+- 항목을 누르면 상세가 바로 열린다 — 2026-09-16에 알림 딥링크용으로 만들어 둔
+  `?open=<id>`(Business/Cooperation/Marketing/산출내역/AI Tools/업무일지/자료메일)와
+  `?month=&day=&eventId=`(Calendar) 규약을 그대로 재사용한다.
+- ⚠️ **날짜 컬럼 타입이 섞여 있다** — 이 기능에서 버그가 날 1순위 지점.
+  `created_at`/`updated_at`과 일부 기한 컬럼(`submission_date`/`presentation_date`/
+  `marketing_tasks.due_date`/`project_start_date`/`opinion_close_at`)은
+  `timestamptz`라 **KST 하루 경계 구간으로** 비교해야 하고, 나머지
+  (`todos.due_date`/`valid_until`/`meeting_date`/`entry_date`/`construction_start`)는
+  `date`라 **날짜 문자열로** 비교한다. timestamptz를 `"2026-09-17"` 같은 문자열과
+  비교하면 UTC 자정으로 해석돼 조용히 9시간 밀린다(낮 데이터로는 안 드러남).
+  KST 계산은 전부 `lib/kstDate.ts`에 모아뒀다 — 예전엔 같은 계산이 calendar-feed
+  라우트·eventsV2 액션·calendar 페이지·ai-issues 크론에 조금씩 다르게 복사돼
+  있었고, 이 기능이 KST 경계에 전적으로 의존해서 이때 합쳤다.
+- **신규/수정 판정**: `updated_at`은 DB 트리거가 아니라 서버 액션이 직접 채우고
+  insert 시점엔 `created_at`과 같다. 한 행을 `created_at` 날짜엔 "신규",
+  `updated_at` 날짜엔 "수정"으로 각각 넣는다 — 이렇게 해야 "어제 등록되고 오늘
+  수정된" 항목이 어제 칸에서 사라지지 않는다.
+- **AI 브리핑 문장**(상단): `daily_briefings`(0077, `issue_date` PK)에 크론이
+  하루 3회(08:10·13:10·18:10 KST) 만들어 upsert하고 **화면은 저장된 문장만
+  읽는다** — 진입 시 AI를 호출하지 않아 페이지가 느려지지 않는다.
+  `app/api/cron/today-briefing` + `lib/server/todayBriefingAi.ts`(AI Issue와 같은
+  fetch + tool_use 패턴, Haiku). `ai-issues` 크론(08:00 KST)보다 10분 늦게 도는
+  이유는 그 크론이 그날 `ai_issues`를 채운 뒤에 읽어야 요약에 들어가기 때문.
+  - 크론은 `getTodayIssues(admin, date, { includePersonalTodos: false })`로 부른다 —
+    **service_role은 RLS를 우회하므로** 이 옵션을 빼면 `todos`에서 팀원 전원의
+    개인 할 일이 딸려 나와 팀 전체가 보는 요약에 새어 나간다.
+- **알려진 한계**(화면 문구에도 반영): ① 감사 로그가 없어 "수정됨 + 현재 상태"까지만
+  보여줄 수 있고 "시작 전 → 진행 중" 같은 diff는 만들 수 없다(보드 히스토리는 사람이
+  쓴 내용이라 그대로 보인다) ② `ad_strategy_memos`에는 `updated_at`이 아예 없어
+  **메모 수정은 감지 불가**(신규 작성만) ③ AI 요약은 스냅샷이라 최대 5시간 전
+  기준일 수 있어 생성 시각을 함께 표시한다(목록은 항상 실시간) ④ `updated_at`을
+  서버 액션이 채우므로 앱 폼을 거치지 않은 변경은 잡히지 않는다 ⑤ To-Do는 본인
+  것만 보이고 AI 요약에는 없다.
+
 ## Calendar
 
 `/dashboard/calendar` — 사용자가 Claude Design으로 만든 "Industry" 테마
@@ -577,16 +628,21 @@ PRD의 "사용자 계정" 요구사항(가입/로그인/데이터 격리)을 이
   저장된다. VAPID 키는 `npx web-push generate-vapid-keys`로 한 번 생성해 고정
   (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`) — 키를
   바꾸면 기존에 저장된 모든 구독이 무효화된다.
-- **알람 발송 크론이 `vercel.json`에 없다**: `app/api/cron/todo-alarms`가 `alarm_at`이
-  지났고 아직 안 보냈고 완료되지 않은 할 일을 찾아 소유자의 모든 구독에 발송하고
-  `alarm_sent`를 채우는데(만료된 구독은 410/404 응답으로 감지해 즉시 삭제), 5분
-  단위로 자주 돌아야 정시 알림에 가까워진다. 이 프로젝트는 **Vercel Hobby(무료)
-  플랜**이라 Vercel Cron이 스케줄과 무관하게 하루 1회로 강제 제한된다(2026-09-11
-  확인) — 그래서 다른 크론(AI Issue)과 달리 Vercel Cron을 쓰지 않고, **외부 무료
-  스케줄러(cron-job.org 등)**가 5분마다 `Authorization: Bearer $CRON_SECRET` 헤더로
-  이 라우트를 직접 호출하도록 사용자가 별도 설정해야 한다(기존 `CRON_SECRET` 값을
-  그대로 재사용, 새 시크릿 아님). 유료 Pro 플랜으로 올리면 `vercel.json`에
-  `"schedule": "*/5 * * * *"`로 추가해도 된다.
+- **알람 발송 크론**: `app/api/cron/todo-alarms`가 `alarm_at`이 지났고 아직 안
+  보냈고 완료되지 않은 할 일을 찾아 소유자의 모든 구독에 발송하고 `alarm_sent`를
+  채운다(만료된 구독은 410/404 응답으로 감지해 즉시 삭제). 5분 단위로 자주 돌아야
+  정시 알림에 가까워진다.
+  - **2026-09-17부터 `vercel.json`의 Cron이 호출한다**(`*/5 * * * *`). 그 전까지는
+    Vercel Hobby(무료) 플랜이 스케줄과 무관하게 Cron을 하루 1회로 강제 제한해서
+    (2026-09-11 확인) **외부 무료 스케줄러(cron-job.org)**가 5분마다
+    `Authorization: Bearer $CRON_SECRET` 헤더로 이 라우트를 직접 호출하고 있었다.
+    Pro 플랜으로 전환하면서 분 단위 스케줄이 가능해져 `vercel.json`으로 되돌렸다
+    (`notification-push`도 같이 — 아래 참고). 라우트 코드는 손댈 필요가 없었다,
+    Vercel Cron이 같은 `CRON_SECRET` 헤더를 자동으로 붙여주기 때문.
+  - ⚠️ **이관 시 외부 스케줄러를 반드시 껐다**: 둘이 같이 돌면
+    `notification_push_queue`를 양쪽이 집어가며 같은 알림을 두 번 보낼 수 있다.
+    나중에 Hobby로 되돌리면 알람이 **조용히** 하루 1회로 줄어드니(에러가 안 남는다)
+    그때는 외부 스케줄러를 다시 켜야 한다.
 
 ## 알림벨 브라우저 푸시
 
@@ -598,7 +654,8 @@ PRD의 "사용자 계정" 요구사항(가입/로그인/데이터 격리)을 이
 자체를 가로챈다(`enqueue_notification_push()`, 0069 — `profiles`의
 `on_auth_user_created` 트리거와 같은 패턴) — 새 알림이 생기면 트리거가
 `notification_push_queue`에 큐잉하고, `app/api/cron/notification-push`가 할 일
-알람 크론과 같은 주기(외부 스케줄러 5분)로 큐를 비우며 그 시점의
+알람 크론과 같은 주기(`vercel.json` Cron 5분 — 2026-09-17 이전에는 외부
+스케줄러였다, 위 "할 일" 섹션 참고)로 큐를 비우며 그 시점의
 `push_subscriptions` 전원에게 발송한다. 수신자를 특정 담당자로 좁히지 않고
 **구독한 팀원 전원**에게 보낸다(사용자 확인, 2026-09-12) — 알림 종류마다
 담당자 개념이 다르고 일부(유튜브 업로드 등)는 담당자가 아예 없어 특정

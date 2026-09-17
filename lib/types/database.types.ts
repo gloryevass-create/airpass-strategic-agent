@@ -2310,6 +2310,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      daily_briefings: {
+        Row: {
+          issue_date: string;
+          summary: string;
+          model: string | null;
+          generated_at: string;
+        };
+        Insert: {
+          issue_date: string;
+          summary: string;
+          model?: string | null;
+          generated_at?: string;
+        };
+        Update: {
+          issue_date?: string;
+          summary?: string;
+          model?: string | null;
+          generated_at?: string;
+        };
+        Relationships: [];
+      };
       ai_issues: {
         Row: {
           id: string;

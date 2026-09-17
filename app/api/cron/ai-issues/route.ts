@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAiIssueCandidates } from "@/lib/server/aiIssueCandidates";
 import { selectAiIssuesWithAI } from "@/lib/server/aiIssueSelection";
+import { todayKstDateStr } from "@/lib/kstDate";
 
 // AI Issue(2026-09-06) — 매일 아침 한 번, news_articles처럼 사용자가 관리하는
 // 키워드가 아니라 고정 검색어로 넓게 모은 뒤 Claude가 "이슈"라고 판단한 것만
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
     // 한국시간 날짜로 직접 채운다 — 크론이 UTC 23:00(=KST 다음날 08:00)에 실행돼서
     // DB 기본값을 쓰면 "오늘 아침" 수집분이 "어제" 날짜로 잘못 찍히는 버그가 있었다
     // (2026-09-07 실측 확인).
-    const issueDate = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    const issueDate = todayKstDateStr();
 
     const admin = createAdminClient();
     const rows = selected.map(({ index, summary }) => {

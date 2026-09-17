@@ -31,6 +31,9 @@ function isItemActive(pathname: string | null, item: LeafItem): boolean {
 // 다른 그룹처럼 접었다 폈다 할 수 있었는데, 이 디자인에서는 상단 고정 목록과
 // 접이식 그룹을 구분해서 그린다).
 const TOP_ITEMS: LeafItem[] = [
+  // 하루를 여는 브리핑이라 맨 위에 둔다(2026-09-17) — 어제/오늘/내일의 일정·변동·기한을
+  // 한 화면에 모은다.
+  { href: "/dashboard/today-issue", label: "Today Issue", icon: "sunrise" },
   { href: "/dashboard/calendar", label: "Calendar", icon: "calendar" },
   { href: "/dashboard/business", label: "Business", icon: "briefcase" },
   { href: "/dashboard/cooperation", label: "Cooperation", icon: "share" },

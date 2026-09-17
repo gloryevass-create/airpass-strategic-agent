@@ -3,6 +3,18 @@
     {
       "path": "/api/cron/ai-issues",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/today-briefing",
+      "schedule": "10 23,4,9 * * *"
+    },
+    {
+      "path": "/api/cron/todo-alarms",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/notification-push",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

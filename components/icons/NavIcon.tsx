@@ -3,6 +3,7 @@ import type { SVGProps } from "react";
 // 서버/클라이언트 컴포넌트 어디서든 그대로 쓸 수 있도록 훅 없이 순수 렌더 함수로 둔다
 // (사이드바 메뉴 아이콘과 각 페이지 제목 아이콘이 이 파일을 함께 쓴다).
 export type IconName =
+  | "sunrise"
   | "search"
   | "document"
   | "clipboard"
@@ -273,6 +274,19 @@ export function NavIcon({ name, ...props }: { name: IconName } & SVGProps<SVGSVG
         <svg {...shared} {...props}>
           <path d="m9 11 3 3L22 4" />
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+        </svg>
+      );
+    // Today Issue(2026-09-17) — 하루를 여는 브리핑 화면이라 해가 떠오르는 모양.
+    case "sunrise":
+      return (
+        <svg {...shared} {...props}>
+          <path d="M12 2v3" />
+          <path d="M4.9 6.9 7 9" />
+          <path d="M2 14h3" />
+          <path d="M19 14h3" />
+          <path d="m17 9 2.1-2.1" />
+          <path d="M7 18a5 5 0 0 1 10 0z" />
+          <path d="M4 22h16" />
         </svg>
       );
   }

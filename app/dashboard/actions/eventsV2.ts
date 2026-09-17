@@ -7,6 +7,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMember } from "@/lib/formatMember";
 import { getValidGoogleAccessToken } from "@/lib/queries/googleCalendar";
 import { insertGoogleCalendarEvent, updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from "@/lib/googleCalendar/api";
+// 알림 링크에 그 일정이 속한 월/날짜를 함께 실어 보내려면 KST 날짜가 필요하다
+// (2026-09-16) — date_start는 UTC ISO라 그대로 slice하면 하루 밀릴 수 있다.
+import { kstDateStrFromIso } from "@/lib/kstDate";
 
 const PATH = "/dashboard/calendar";
 
@@ -25,14 +28,6 @@ const PATH = "/dashboard/calendar";
 // notifications insert처럼 RLS만 통과하면 되는 작업은 service_role로 하는 게
 // 안전하다. 대신 "누가" 하는 작업인지는 항상 응답 전에 확인한 user.id로만
 // 판단한다(권한 판단을 admin 클라이언트에 맡기지 않는다).
-
-// 알림 링크에 그 일정이 속한 월/날짜를 함께 실어 보내려고 KST 날짜 문자열로
-// 바꾼다(2026-09-16) — date_start는 UTC ISO라 그대로 slice하면 하루 밀릴 수
-// 있다(Calendar "오늘" 표시 버그와 같은 원인, components/dashboard/
-// IndustryEventCalendar.tsx::toKstDateStr 참고).
-function kstDateStrFromIso(iso: string): string {
-  return new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
 
 export type TeamEventV2FormState = { error?: string } | undefined;
 
