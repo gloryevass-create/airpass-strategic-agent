@@ -19,30 +19,27 @@ import {
 // Business(/dashboard/business)를 Claude Design "Industry" 테마로 다시 그린 것과
 // 같은 틀을 재사용한다 — 데이터·서버 액션은 기존 Marketing 그대로, 화면만
 // 새로 그렸다(사용자 확인, 2026-08-29).
-const CATEGORIES = ["문서", "영상", "사진", "웹페이지", "광고"];
+// 분류에서 "영상"·"사진"을 빼고 "행사"를 추가했다(2026-09-17, 사용자 요청) —
+// 바꾸기 전에 확인했고 그 두 분류를 쓰던 항목은 하나도 없었다(있었다면 칸반에서
+// 해당 컬럼이 사라져 항목이 안 보이게 된다). AiCommandBar.tsx와 lib/aiCommand.ts의
+// 같은 목록도 함께 맞춰야 한다 — 세 곳이 어긋나면 AI 입력창으로 등록한 분류가
+// 보드 칸반에 컬럼이 없어 화면에서 사라진다.
+const CATEGORIES = ["문서", "웹페이지", "광고", "행사"];
 const WORK_TYPES = ["브로슈어", "매뉴얼", "홈페이지", "SNS", "영상", "기타"];
 const STAGES = ["기획", "제작", "수행"];
 const STATUSES = ["시작 전", "진행 중", "완료", "종료"];
 
 // 칸반 그룹 헤더의 첫 글자 코드 대신 아이콘으로 표시(2026-09-12, 사용자 확인).
-// "사진"은 NavIcon 세트에 카메라 아이콘이 없어 이 컴포넌트에서만 인라인으로 그린다.
+// 목록에 없는 분류(예전 데이터 등)는 "menu"로 폴백한다.
 const CATEGORY_ICONS: Record<string, IconName> = {
   문서: "document",
-  영상: "play",
   웹페이지: "link",
   광고: "megaphone",
+  행사: "calendar",
   미분류: "menu",
 };
 
 function CategoryIcon({ label }: { label: string }) {
-  if (label === "사진") {
-    return (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-        <circle cx="12" cy="13" r="4" />
-      </svg>
-    );
-  }
   return <NavIcon name={CATEGORY_ICONS[label] ?? "menu"} className="h-4 w-4 shrink-0" style={{ color: "var(--color-accent-700)" }} />;
 }
 const TERMINAL_STATUSES = new Set(["완료", "종료"]);

@@ -141,7 +141,8 @@ const COOPERATION_WORK_TYPES = [
   "첫 미팅",
 ] as const;
 const COOPERATION_STATUSES = ["시작 전", "진행 중", "완료", "종료"] as const;
-const MARKETING_CATEGORIES = ["", "문서", "영상", "사진", "웹페이지", "광고"] as const;
+// IndustryMarketingBoard.tsx의 CATEGORIES와 같은 목록 + "모르면 빈 문자열"(2026-09-17).
+const MARKETING_CATEGORIES = ["", "문서", "웹페이지", "광고", "행사"] as const;
 const MARKETING_WORK_TYPES = ["", "브로슈어", "매뉴얼", "홈페이지", "SNS", "영상", "기타"] as const;
 const MARKETING_STAGES = ["", "기획", "제작", "수행"] as const;
 const MARKETING_STATUSES = ["시작 전", "진행 중", "완료", "종료"] as const;
