@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database.types";
+import { requireAuthedClient } from "@/lib/supabase/authed";
 
 type Client = SupabaseClient<Database>;
 
@@ -27,17 +28,19 @@ export type ProductCatalogItem = {
 };
 
 export async function getProductCatalog(supabase: Client): Promise<ProductCatalogItem[]> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // 즐겨찾기(본인 것만)를 읽으려고 사용자 id가 필요한데, 예전엔 여기서
+  // supabase.auth.getUser()를 한 번 더 불렀다 — 이건 로컬 토큰 디코딩이 아니라
+  // Supabase Auth 서버 왕복이라(실측 56~150ms), 이미 인증을 마친 페이지가
+  // 부르는 함수에서 같은 검증을 또 기다리는 셈이었다(2026-09-17). 요청당 한 번만
+  // 실제로 검증하는 requireAuthedClient()(React cache로 감쌈)를 쓰면 이 호출은
+  // 같은 요청 안에서 이미 끝난 결과를 그대로 받는다.
+  const { user } = await requireAuthedClient();
 
   const [{ data }, { data: vendors }, { data: favorites }, { data: userOrder }] = await Promise.all([
     supabase.from("product_catalog").select("*").order("name", { ascending: true }),
     supabase.from("partner_vendors").select("id, company_name"),
-    user ? supabase.from("product_catalog_favorites").select("product_id").eq("user_id", user.id) : Promise.resolve({ data: [] as { product_id: string }[] }),
-    user
-      ? supabase.from("product_catalog_user_order").select("product_ids").eq("user_id", user.id).maybeSingle()
-      : Promise.resolve({ data: null }),
+    supabase.from("product_catalog_favorites").select("product_id").eq("user_id", user.id),
+    supabase.from("product_catalog_user_order").select("product_ids").eq("user_id", user.id).maybeSingle(),
   ]);
 
   const vendorNameById = new Map((vendors ?? []).map((v) => [v.id, v.company_name]));

@@ -21,18 +21,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
   const { supabase } = await requireAdminClient();
   const { driveUploadConnected, driveUploadError } = await searchParams;
 
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: false });
-
+  // 두 조회는 서로 무관하니 나란히 보낸다(2026-09-17).
   // google_drive_upload_connection은 RLS 정책이 없어(service_role만 접근) admin
   // 클라이언트로 조회해야 한다 — 다른 테이블처럼 세션 클라이언트로는 항상 빈 결과다.
-  const { data: driveConnection } = await createAdminClient()
-    .from("google_drive_upload_connection")
-    .select("google_email, connected_at")
-    .eq("id", true)
-    .maybeSingle();
+  const [{ data: profiles }, { data: driveConnection }] = await Promise.all([
+    supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+    createAdminClient()
+      .from("google_drive_upload_connection")
+      .select("google_email, connected_at")
+      .eq("id", true)
+      .maybeSingle(),
+  ]);
 
   return (
     <div className="industry-theme board-page-content" style={{ padding: "var(--space-8) var(--space-6)" }}>

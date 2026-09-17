@@ -9,6 +9,7 @@ import { DEFAULT_MATERIAL_EMAIL_SUBJECT, DEFAULT_MATERIAL_EMAIL_MESSAGE } from "
 import { buildMaterialEmailHtml, isVideoFileName, matchProductMaterialFiles, type MaterialEmailProductLink } from "@/lib/materialEmailTemplate";
 import { getQuotation } from "@/lib/queries/quotations";
 import { getMaterialEmailLogById } from "@/lib/queries/materialEmailLogs";
+import { notifyTeamAfterResponseAs } from "@/lib/notifyTeam";
 import type { AiMaterialEmailDraft } from "@/lib/aiCommand";
 
 const PATH = "/dashboard/material-email";
@@ -75,9 +76,29 @@ async function performSend(
   if (!message) return { error: "안내 내용을 입력하세요." };
   if (fileIds.length === 0 && !quotationId) return { error: "보낼 자료를 하나 이상 선택하거나 산출내역을 첨부하세요." };
 
+  // 발송 전 준비 작업(구글드라이브 공유 링크 생성·제품소개 자료 링크·산출내역·
+  // 발신자 프로필·개인 SMTP 계정)은 서로 의존하지 않는데 예전엔 줄줄이 기다렸다 —
+  // 구글드라이브 쪽만 파일 수만큼 API를 부르는 가장 느린 구간이라, 그 뒤에 붙은
+  // DB 조회들이 그대로 대기 시간에 더해졌다(2026-09-17). 먼저 전부 동시에 띄워
+  // 두고 아래에서 하나씩 받는다 — 아래 await는 이미 진행 중인 작업을 받는 것뿐이라
+  // 에러 메시지와 우선순위는 예전과 똑같이 유지된다.
+  const filesPromise = Promise.all(fileIds.map((id) => ensureFileShared(id)));
+  const productLinksPromise = resolveProductLinks();
+  const quotationPromise = quotationId ? getQuotation(supabase, quotationId) : Promise.resolve(null);
+  const profilePromise = supabase.from("profiles").select("name, title, email, phone").eq("id", user.id).single();
+  const personalSmtpPromise = supabase
+    .from("material_email_smtp_accounts")
+    .select("smtp_user, smtp_password")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  // 앞의 것이 실패해 먼저 return하면 뒤 promise의 거부가 처리되지 않은 채로 남아
+  // Node가 경고를 띄운다 — 실제 에러는 아래 await에서 잡으므로 여기선 표시만 한다.
+  productLinksPromise.catch(() => {});
+  quotationPromise.catch(() => {});
+
   let files: { name: string; link: string; mimeType: string; iconLink: string | null }[];
   try {
-    files = await Promise.all(fileIds.map((id) => ensureFileShared(id)));
+    files = await filesPromise;
   } catch (e) {
     return { error: `자료 공유 링크 생성 실패: ${e instanceof Error ? e.message : "알 수 없는 오류"}` };
   }
@@ -89,7 +110,7 @@ async function performSend(
 
   let quotation: { id: string; quoteNumber: string; customerName: string; printUrl: string } | null = null;
   if (quotationId) {
-    const q = await getQuotation(supabase, quotationId);
+    const q = await quotationPromise;
     if (!q) return { error: "선택한 산출내역을 찾을 수 없습니다." };
     // 고객은 로그인이 안 돼 있으므로 /dashboard 안쪽 인쇄 페이지가 아니라
     // 로그인 없이 열리는 공개 페이지(app/quote/[id])로 링크를 보낸다.
@@ -98,12 +119,12 @@ async function performSend(
 
   let productLinks: MaterialEmailProductLink[];
   try {
-    productLinks = await resolveProductLinks();
+    productLinks = await productLinksPromise;
   } catch (e) {
     return { error: `제품소개 자료 링크 생성 실패: ${e instanceof Error ? e.message : "알 수 없는 오류"}` };
   }
 
-  const { data: profile } = await supabase.from("profiles").select("name, title, email, phone").eq("id", user.id).single();
+  const { data: profile } = await profilePromise;
   const senderName = profile?.name ?? profile?.email ?? user.email ?? "";
   const senderTitle = profile?.title ?? null;
   const senderEmail = profile?.email ?? user.email ?? "";
@@ -116,11 +137,7 @@ async function performSend(
   const port = Number(process.env.MATERIAL_EMAIL_SMTP_PORT);
   if (!host || !port) return { error: "메일 서버 설정(MATERIAL_EMAIL_SMTP_HOST/PORT)이 없습니다." };
 
-  const { data: personalSmtp } = await supabase
-    .from("material_email_smtp_accounts")
-    .select("smtp_user, smtp_password")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const { data: personalSmtp } = await personalSmtpPromise;
 
   const smtp = personalSmtp
     ? { host, port, user: personalSmtp.smtp_user, password: personalSmtp.smtp_password, fromName: senderName || null }
@@ -182,7 +199,7 @@ async function performSend(
   // 알림 없이 조용히 넘어간다 — 이미 메일 자체는 발송 완료됐으므로 여기서
   // 에러로 되돌리면 안 된다.
   if (log) {
-    await supabase.from("notifications").insert({
+    notifyTeamAfterResponseAs({
       type: "material_email",
       title: subject,
       message: `${senderName}님이 ${recipients.join(", ")}에게 자료를 발송했습니다.`,

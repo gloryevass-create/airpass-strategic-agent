@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAuthedClient } from "@/lib/supabase/authed";
 import { formatMember } from "@/lib/formatMember";
+import { notifyTeamAfterResponseAs } from "@/lib/notifyTeam";
 import { generateQuoteNumber, type QuotationItem } from "@/lib/queries/quotations";
 import type { Database } from "@/lib/types/database.types";
 
@@ -133,12 +134,16 @@ export async function createQuotation(
 
   const discountAmount = numberOrZero(formData, "discountAmount");
   const extraAmount = numberOrZero(formData, "extraAmount");
-  const procurementFeeAmount = await computeProcurementFee(supabase, items);
+  // 세 조회(조달수수료율·같은 날 발급 건수·작성자 이름)는 서로 의존하지 않는데
+  // 예전엔 줄줄이 기다렸다 — 저장 버튼 하나에 왕복 3회가 순서대로 쌓였다
+  // (2026-09-17). 나란히 보내면 가장 느린 하나만큼만 걸린다. 작성자 이름은
+  // `created_by_name` 컬럼에 저장되는 값이라 알림과 달리 응답 이후로 미룰 수 없다.
+  const [procurementFeeAmount, quoteNumber, { data: profile }] = await Promise.all([
+    computeProcurementFee(supabase, items),
+    generateQuoteNumber(supabase, quoteDate),
+    supabase.from("profiles").select("name, email").eq("id", user.id).single(),
+  ]);
   const totals = computeTotals(items, discountAmount, extraAmount, procurementFeeAmount);
-
-  const quoteNumber = await generateQuoteNumber(supabase, quoteDate);
-
-  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
   const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
 
   const { data: quotation, error } = await supabase
@@ -170,7 +175,7 @@ export async function createQuotation(
 
   if (error || !quotation) return { error: `저장 실패: ${error?.message ?? "알 수 없는 오류"}` };
 
-  await supabase.from("notifications").insert({
+  notifyTeamAfterResponseAs({
     type: "quotation",
     title: `${quoteNumber} (${customerName})`,
     message: `${actor}님이 새 산출내역을 작성했습니다.`,

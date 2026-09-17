@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuthedClient } from "@/lib/supabase/authed";
-import { formatMember } from "@/lib/formatMember";
+import { notifyTeamAfterResponse } from "@/lib/notifyTeam";
 
 const PATH = "/dashboard/ai-tools";
 
@@ -19,9 +19,13 @@ async function canModifyTool(
   userId: string,
   toolId: string
 ): Promise<boolean> {
-  const { data: tool } = await supabase.from("ai_tools").select("author_id").eq("id", toolId).maybeSingle();
+  // 두 조회는 서로 의존하지 않으므로 나란히 보낸다 — 순서대로 기다리면 수정·삭제
+  // 버튼을 누른 사람이 왕복 2회를 연달아 기다리게 된다(2026-09-17).
+  const [{ data: tool }, { data: profile }] = await Promise.all([
+    supabase.from("ai_tools").select("author_id").eq("id", toolId).maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+  ]);
   if (!tool) return false;
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
   return tool.author_id === userId || profile?.role === "admin";
 }
 
@@ -52,14 +56,12 @@ export async function createAiTool(_prevState: AiToolFormState, formData: FormDa
   // 새 항목 등록을 팀 알림 피드에 남긴다(2026-09-16, 사용자 확인 — AI HUB만
   // 알림이 빠져있던 걸 발견). 알림을 누르면 목록이 아니라 이 도구 상세가
   // 바로 열리도록 ?open=id를 붙인다(AiToolsBoard.tsx가 마운트 시 읽음).
-  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
-  const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
-  await supabase.from("notifications").insert({
+  notifyTeamAfterResponse(user, (actor) => ({
     type: "ai_tool",
     title,
     message: `${actor}님이 새 AI 도구를 등록했습니다.`,
     link: `${PATH}?open=${inserted.id}`,
-  });
+  }));
 
   revalidatePath(PATH);
   return undefined;

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuthedClient } from "@/lib/supabase/authed";
-import { formatMember } from "@/lib/formatMember";
+import { notifyTeamAfterResponse } from "@/lib/notifyTeam";
 import { resolveHistoryAttachments, validateHistoryAttachmentFiles } from "@/lib/historyAttachments";
 
 const PATH = "/dashboard/business2";
@@ -72,9 +72,7 @@ export async function createBusinessProjectV2(
   const { data: inserted, error } = await supabase.from("business_projects_v2").insert(fields).select("id").single();
   if (error) return { error: `저장 실패: ${error.message}` };
 
-  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
-  const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
-  await supabase.from("notifications").insert({
+  notifyTeamAfterResponse(user, (actor) => ({
     type: "business",
     title: fields.title,
     message: `${actor}님이 새 SI Business 항목을 등록했습니다.`,
@@ -84,7 +82,7 @@ export async function createBusinessProjectV2(
     // 보므로 새로 그린 화면(PATH_V2_REDESIGN) 쪽으로 보낸다(사이드바 기본
     // 메뉴가 이쪽이라 — 옛 /dashboard/business2는 그대로 둠).
     link: `${PATH_V2_REDESIGN}?open=${inserted.id}`,
-  });
+  }));
 
   revalidateBusinessPaths();
   return undefined;

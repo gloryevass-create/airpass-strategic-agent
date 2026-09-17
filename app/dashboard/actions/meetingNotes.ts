@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuthedClient } from "@/lib/supabase/authed";
-import { formatMember } from "@/lib/formatMember";
+import { notifyTeamAfterResponse } from "@/lib/notifyTeam";
 
 const LIST_PATH = "/dashboard/meeting-notes";
 const MAX_CONTENT_SIZE = 2 * 1024 * 1024; // 2MB — 회의록 텍스트치고 충분히 넉넉한 상한.
@@ -78,14 +78,12 @@ export async function createMeetingNote(
 
   if (error || !note) return { error: `저장 실패: ${error?.message ?? "알 수 없는 오류"}` };
 
-  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
-  const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
-  await supabase.from("notifications").insert({
+  notifyTeamAfterResponse(user, (actor) => ({
     type: "meeting_note",
     title,
     message: `${actor}님이 미팅노트를 등록했습니다.`,
     link: `/dashboard/meeting-notes/${note.id}`,
-  });
+  }));
 
   revalidatePath(LIST_PATH);
   redirect(`/dashboard/meeting-notes/${note.id}`);
@@ -96,9 +94,13 @@ async function canModifyNote(
   userId: string,
   noteId: string
 ): Promise<boolean> {
-  const { data: note } = await supabase.from("meeting_notes").select("author_id").eq("id", noteId).maybeSingle();
+  // 서로 의존하지 않는 두 조회라 나란히 보낸다(2026-09-17 — 순서대로 기다리면
+  // 수정·삭제를 누른 사람이 왕복 2회를 연달아 기다린다).
+  const [{ data: note }, { data: profile }] = await Promise.all([
+    supabase.from("meeting_notes").select("author_id").eq("id", noteId).maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+  ]);
   if (!note) return false;
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
   return note.author_id === userId || profile?.role === "admin";
 }
 

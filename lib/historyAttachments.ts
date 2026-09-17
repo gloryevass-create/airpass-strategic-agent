@@ -71,32 +71,35 @@ export async function resolveHistoryAttachments(
   files: File[]
 ): Promise<HistoryAttachmentInsert[]> {
   const useDrive = await isGoogleDriveAttachmentsConfigured();
-  const results: HistoryAttachmentInsert[] = [];
 
-  for (const file of files) {
-    if (useDrive) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const fileId = await uploadAttachmentToDrive(service, file.name, bytes, file.type).catch((e) => {
-        console.error(`[resolveHistoryAttachments] 업로드 실패 (${file.name}):`, e instanceof Error ? e.message : e);
+  // 파일마다 순서대로 업로드하면 첨부 5개(상한)를 붙인 사람은 업로드 시간이
+  // 그대로 5배로 쌓인다 — 서로 독립적인 업로드라 나란히 올린다(2026-09-17).
+  // 실패한 파일만 조용히 빠지고 나머지는 원래 순서를 유지한다.
+  const results = await Promise.all(
+    files.map(async (file): Promise<HistoryAttachmentInsert | null> => {
+      if (useDrive) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const fileId = await uploadAttachmentToDrive(service, file.name, bytes, file.type).catch((e) => {
+          console.error(`[resolveHistoryAttachments] 업로드 실패 (${file.name}):`, e instanceof Error ? e.message : e);
+          return null;
+        });
+        if (!fileId) return null;
+        return { file_name: file.name, content_type: file.type, storage_path: null, drive_file_id: fileId };
+      }
+
+      const path = `${service}/${historyId}/${safeStorageFileName(file.name)}`;
+      const { error } = await supabase.storage
+        .from(HISTORY_ATTACHMENTS_BUCKET)
+        .upload(path, file, { contentType: file.type });
+      if (error) {
+        console.error(`[resolveHistoryAttachments] 업로드 실패 (${file.name}):`, error.message);
         return null;
-      });
-      if (!fileId) continue;
-      results.push({ file_name: file.name, content_type: file.type, storage_path: null, drive_file_id: fileId });
-      continue;
-    }
+      }
+      return { file_name: file.name, content_type: file.type, storage_path: path, drive_file_id: null };
+    })
+  );
 
-    const path = `${service}/${historyId}/${safeStorageFileName(file.name)}`;
-    const { error } = await supabase.storage
-      .from(HISTORY_ATTACHMENTS_BUCKET)
-      .upload(path, file, { contentType: file.type });
-    if (error) {
-      console.error(`[resolveHistoryAttachments] 업로드 실패 (${file.name}):`, error.message);
-      continue;
-    }
-    results.push({ file_name: file.name, content_type: file.type, storage_path: path, drive_file_id: null });
-  }
-
-  return results;
+  return results.filter((r): r is HistoryAttachmentInsert => r !== null);
 }
 
 /** 조회 시점에 표시용 URL을 만든다 — 구글드라이브는 API 호출 없이 고정 링크로

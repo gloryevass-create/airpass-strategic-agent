@@ -148,11 +148,17 @@ export async function getDashboardData(
   supabase: Client,
   options?: AccountStatsRangeOption
 ): Promise<DashboardData> {
-  const latestDate = await getLatestDataDate();
+  // 두 앵커 날짜 조회는 서로 무관하니 나란히 보낸다(2026-09-17) — 예전엔
+  // keyword_daily_metrics 앵커를 받은 뒤에야 ad_account_daily_stats 앵커를
+  // 조회해서 왕복이 순서대로 쌓였다(아래 본 쿼리 11개는 원래도 병렬).
+  const [latestDate, latestAccountStatsDateRaw] = await Promise.all([
+    getLatestDataDate(),
+    getLatestAccountStatsDate(supabase),
+  ]);
   if (!latestDate) return EMPTY;
 
   const trendStart = daysBefore(latestDate, TREND_DAYS - 1);
-  const latestAccountStatsDate = (await getLatestAccountStatsDate(supabase)) ?? latestDate;
+  const latestAccountStatsDate = latestAccountStatsDateRaw ?? latestDate;
   const defaultAccountStatsSince = daysBefore(latestAccountStatsDate, ACCOUNT_STATS_TREND_DAYS - 1);
 
   const [

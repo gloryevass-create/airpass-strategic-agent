@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuthedClient } from "@/lib/supabase/authed";
-import { formatMember } from "@/lib/formatMember";
+import { notifyTeamAfterResponse } from "@/lib/notifyTeam";
 import { resolveHistoryAttachments, validateHistoryAttachmentFiles } from "@/lib/historyAttachments";
 
 const PATH = "/dashboard/cooperation";
@@ -52,9 +52,7 @@ export async function createCooperationProject(
   const { data: inserted, error } = await supabase.from("cooperation_projects").insert(fields).select("id").single();
   if (error) return { error: `저장 실패: ${error.message}` };
 
-  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
-  const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
-  await supabase.from("notifications").insert({
+  notifyTeamAfterResponse(user, (actor) => ({
     type: "cooperation",
     title: fields.title,
     message: `${actor}님이 새 협업 항목을 등록했습니다.`,
@@ -62,7 +60,7 @@ export async function createCooperationProject(
     // 붙인다(2026-09-16, 사용자 요청) — IndustryCooperationBoard.tsx가 마운트
     // 시 이 쿼리를 읽어 editingId를 채운다.
     link: `${PATH}?open=${inserted.id}`,
-  });
+  }));
 
   revalidatePath(PATH);
   return undefined;

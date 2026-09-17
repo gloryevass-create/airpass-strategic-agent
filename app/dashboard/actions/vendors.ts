@@ -1,13 +1,40 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireAuthedClient } from "@/lib/supabase/authed";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { extractVendorInfoFromDocument } from "@/lib/vendorDocumentAi";
 import type { VendorDocumentType } from "@/lib/queries/vendors";
 import { deleteAttachmentFromDrive, isGoogleDriveAttachmentsConfigured, uploadAttachmentToDrive } from "@/lib/googleDriveAttachments";
 import { safeStorageFileName } from "@/lib/storageKey";
 
 const PATH = "/dashboard/vendors";
+const DOCUMENTS_BUCKET = "vendor-documents";
+
+/** 서류 실물(Storage/구글드라이브)을 응답 이후에 지운다(2026-09-17) — DB 행이
+ * 사라진 뒤 하는 뒷정리라 삭제 버튼을 누른 사람이 기다릴 필요가 없다(Memo
+ * Board·Work Journal과 같은 처리). after() 안에서는 세션 쿠키를 다시 쓸 수
+ * 없어 service_role 클라이언트로 지운다(지울 경로는 이미 응답 전에 권한이
+ * 확인된 행에서 읽어온 값). */
+function cleanUpVendorFilesAfterResponse(
+  documents: { storage_path: string | null; drive_file_id: string | null }[]
+): void {
+  const legacyPaths = documents.map((d) => d.storage_path).filter((p): p is string => Boolean(p));
+  const driveIds = documents.map((d) => d.drive_file_id).filter((i): i is string => Boolean(i));
+  if (legacyPaths.length === 0 && driveIds.length === 0) return;
+
+  after(async () => {
+    try {
+      await Promise.all([
+        legacyPaths.length ? createAdminClient().storage.from(DOCUMENTS_BUCKET).remove(legacyPaths) : Promise.resolve(),
+        ...driveIds.map((fileId) => deleteAttachmentFromDrive(fileId)),
+      ]);
+    } catch (e) {
+      console.error("[vendors] 서류 파일 정리 실패:", e instanceof Error ? e.message : e);
+    }
+  });
+}
 
 export type VendorFormState = { error?: string } | undefined;
 
@@ -54,23 +81,14 @@ export async function saveVendor(_prevState: VendorFormState, formData: FormData
 export async function deleteVendor(id: string): Promise<void> {
   const { supabase } = await requireAuthedClient();
 
+  // 서류 행은 제조사 삭제 시 cascade로 함께 지워지므로 파일 경로만 미리 읽어둔다.
   const { data: documents } = await supabase
     .from("vendor_documents")
     .select("storage_path, drive_file_id")
     .eq("vendor_id", id);
-  if (documents?.length) {
-    const legacyPaths = documents.map((d) => d.storage_path).filter((p): p is string => Boolean(p));
-    if (legacyPaths.length) {
-      await supabase.storage.from("vendor-documents").remove(legacyPaths);
-    }
-    await Promise.all(
-      documents
-        .map((d) => d.drive_file_id)
-        .filter((fid): fid is string => Boolean(fid))
-        .map((fileId) => deleteAttachmentFromDrive(fileId))
-    );
-  }
+
   await supabase.from("partner_vendors").delete().eq("id", id);
+  cleanUpVendorFilesAfterResponse(documents ?? []);
 
   revalidatePath(PATH);
 }
@@ -106,6 +124,11 @@ export async function uploadVendorDocument(formData: FormData): Promise<UploadVe
 
   // 제품자료는 업체 정보 추출 대상이 아니라 AI 호출 자체를 건너뛴다(카탈로그
   // 이미지에서 사업자번호 같은 값을 억지로 읽어내려 하지 않도록).
+  // AI 추출(가장 느린 구간)과 "구글드라이브가 설정돼 있는지"(DB 조회)는 서로
+  // 무관하니 나란히 진행한다 — 예전엔 AI가 끝난 뒤에야 이 조회를 시작했다(2026-09-17).
+  const useDrivePromise = isGoogleDriveAttachmentsConfigured();
+  useDrivePromise.catch(() => {});
+
   let extracted: Record<string, string> = {};
   if (documentType !== "product_material") {
     try {
@@ -130,7 +153,7 @@ export async function uploadVendorDocument(formData: FormData): Promise<UploadVe
     vendorId = created.id;
   }
 
-  if (await isGoogleDriveAttachmentsConfigured()) {
+  if (await useDrivePromise) {
     const fileId = await uploadAttachmentToDrive("vendor", file.name, bytes, file.type).catch((e) => {
       console.error("[uploadVendorDocument] 업로드 실패:", e instanceof Error ? e.message : e);
       return null;
@@ -149,7 +172,7 @@ export async function uploadVendorDocument(formData: FormData): Promise<UploadVe
   }
 
   const path = `${vendorId}/${safeStorageFileName(file.name)}`;
-  const { error: uploadError } = await supabase.storage.from("vendor-documents").upload(path, bytes, {
+  const { error: uploadError } = await supabase.storage.from(DOCUMENTS_BUCKET).upload(path, bytes, {
     contentType: file.type,
   });
   if (uploadError) {
@@ -169,17 +192,14 @@ export async function uploadVendorDocument(formData: FormData): Promise<UploadVe
 
 export async function deleteVendorDocument(documentId: string): Promise<void> {
   const { supabase } = await requireAuthedClient();
-  const { data: document } = await supabase
+  // 행을 지우면서 그 행의 파일 정보를 응답으로 함께 받아온다 — 조회 → 파일
+  // 삭제 → 행 삭제로 줄줄이 기다리던 것을 한 번의 왕복으로(2026-09-17).
+  const { data: deleted } = await supabase
     .from("vendor_documents")
-    .select("storage_path, drive_file_id")
+    .delete()
     .eq("id", documentId)
+    .select("storage_path, drive_file_id")
     .maybeSingle();
-  if (document?.storage_path) {
-    await supabase.storage.from("vendor-documents").remove([document.storage_path]);
-  }
-  if (document?.drive_file_id) {
-    await deleteAttachmentFromDrive(document.drive_file_id);
-  }
-  await supabase.from("vendor_documents").delete().eq("id", documentId);
+  if (deleted) cleanUpVendorFilesAfterResponse([deleted]);
   revalidatePath(PATH);
 }

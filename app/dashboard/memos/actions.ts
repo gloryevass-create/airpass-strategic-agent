@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { requireAuthedClient } from "@/lib/supabase/authed";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { MemoCategory } from "@/lib/queries/memos";
-import { formatMember } from "@/lib/formatMember";
+import { notifyTeamAfterResponse } from "@/lib/notifyTeam";
 import { deleteAttachmentFromDrive, isGoogleDriveAttachmentsConfigured, uploadAttachmentToDrive } from "@/lib/googleDriveAttachments";
 import { safeStorageFileName } from "@/lib/storageKey";
 
@@ -50,6 +52,79 @@ function validateMemoFiles(files: File[]): string | null {
   return null;
 }
 
+const MEMO_BUCKET = "memo-attachments";
+
+type MemoAttachmentRow = {
+  memo_id: string;
+  file_name: string;
+  file_size: number;
+  storage_path: string | null;
+  drive_file_id: string | null;
+};
+
+/** 첨부파일들을 올리고 insert할 행 배열을 돌려준다(작성·수정 공용, 2026-09-17).
+ * 예전엔 작성/수정 액션이 각자 똑같은 for 루프로 "한 파일 올리고 → 그 행 insert →
+ * 다음 파일"을 반복해서, 첨부 5개(상한)면 왕복 10회가 순서대로 쌓였다 — 업로드는
+ * 나란히 하고 행은 한 번에 insert한다. 개별 실패는 예전처럼 건너뛰되 failed로
+ * 알려서 호출부가 ?attachmentError=1을 붙일 수 있게 한다. */
+async function uploadMemoAttachments(
+  supabase: Awaited<ReturnType<typeof requireAuthedClient>>["supabase"],
+  memoId: string,
+  files: File[],
+  label: string
+): Promise<{ failed: boolean }> {
+  if (files.length === 0) return { failed: false };
+
+  const useDrive = await isGoogleDriveAttachmentsConfigured();
+  const results = await Promise.all(
+    files.map(async (file): Promise<MemoAttachmentRow | null> => {
+      if (useDrive) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const fileId = await uploadAttachmentToDrive("memo", file.name, bytes, file.type).catch((e) => {
+          console.error(`[${label}] 첨부파일 업로드 실패 (${file.name}):`, e instanceof Error ? e.message : e);
+          return null;
+        });
+        if (!fileId) return null;
+        return { memo_id: memoId, file_name: file.name, file_size: file.size, storage_path: null, drive_file_id: fileId };
+      }
+      const path = `${memoId}/${safeStorageFileName(file.name)}`;
+      const { error } = await supabase.storage.from(MEMO_BUCKET).upload(path, file, { contentType: file.type });
+      if (error) {
+        console.error(`[${label}] 첨부파일 업로드 실패 (${file.name}):`, error.message);
+        return null;
+      }
+      return { memo_id: memoId, file_name: file.name, file_size: file.size, storage_path: path, drive_file_id: null };
+    })
+  );
+
+  const rows = results.filter((r): r is MemoAttachmentRow => r !== null);
+  if (rows.length > 0) await supabase.from("ad_strategy_memo_attachments").insert(rows);
+  return { failed: rows.length !== files.length };
+}
+
+/** 첨부파일 실물(Storage/구글드라이브)을 응답 이후에 지운다 — DB 행이 사라진
+ * 뒤 하는 뒷정리라 사용자가 기다릴 필요가 없다(2026-09-17). after() 안에서는
+ * 세션 쿠키를 다시 쓸 수 없어 service_role 클라이언트로 지운다(지울 경로는
+ * 이미 응답 전에 권한이 확인된 행에서 읽어온 값). */
+function cleanUpMemoFilesAfterResponse(
+  attachments: { storage_path: string | null; drive_file_id: string | null }[]
+): void {
+  const legacyPaths = attachments.map((a) => a.storage_path).filter((p): p is string => Boolean(p));
+  const driveIds = attachments.map((a) => a.drive_file_id).filter((i): i is string => Boolean(i));
+  if (legacyPaths.length === 0 && driveIds.length === 0) return;
+
+  after(async () => {
+    try {
+      await Promise.all([
+        legacyPaths.length ? createAdminClient().storage.from(MEMO_BUCKET).remove(legacyPaths) : Promise.resolve(),
+        ...driveIds.map((fileId) => deleteAttachmentFromDrive(fileId)),
+      ]);
+    } catch (e) {
+      console.error("[memos] 첨부파일 정리 실패:", e instanceof Error ? e.message : e);
+    }
+  });
+}
+
 export type CreateMemoState = { error?: string } | undefined;
 
 export async function createMemo(_prevState: CreateMemoState, formData: FormData): Promise<CreateMemoState> {
@@ -85,53 +160,14 @@ export async function createMemo(_prevState: CreateMemoState, formData: FormData
     return { error: `저장 실패: ${error?.message ?? "알 수 없는 오류"}` };
   }
 
-  let attachmentFailed = false;
-  const useDrive = await isGoogleDriveAttachmentsConfigured();
-  for (const file of files) {
-    if (useDrive) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const fileId = await uploadAttachmentToDrive("memo", file.name, bytes, file.type).catch((e) => {
-        console.error(`[createMemo] 첨부파일 업로드 실패 (${file.name}):`, e instanceof Error ? e.message : e);
-        return null;
-      });
-      if (!fileId) {
-        attachmentFailed = true;
-        continue;
-      }
-      await supabase.from("ad_strategy_memo_attachments").insert({
-        memo_id: memo.id,
-        file_name: file.name,
-        drive_file_id: fileId,
-        file_size: file.size,
-      });
-      continue;
-    }
-    const path = `${memo.id}/${safeStorageFileName(file.name)}`;
-    const { error: uploadError } = await supabase.storage.from("memo-attachments").upload(path, file, {
-      contentType: file.type,
-    });
-    if (uploadError) {
-      attachmentFailed = true;
-      console.error(`[createMemo] 첨부파일 업로드 실패 (${file.name}):`, uploadError.message);
-      continue;
-    }
+  const { failed: attachmentFailed } = await uploadMemoAttachments(supabase, memo.id, files, "createMemo");
 
-    await supabase.from("ad_strategy_memo_attachments").insert({
-      memo_id: memo.id,
-      file_name: file.name,
-      storage_path: path,
-      file_size: file.size,
-    });
-  }
-
-  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
-  const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
-  await supabase.from("notifications").insert({
+  notifyTeamAfterResponse(user, (actor) => ({
     type: "memo",
     title,
     message: `${actor}님이 광고전략메모를 작성했습니다.`,
     link: `/dashboard/memos/${memo.id}`,
-  });
+  }));
 
   revalidatePath("/dashboard/memos");
   redirect(`/dashboard/memos/${memo.id}${attachmentFailed ? "?attachmentError=1" : ""}`);
@@ -142,14 +178,13 @@ async function canModifyMemo(
   userId: string,
   memoId: string
 ): Promise<{ allowed: boolean; authorId?: string }> {
-  const { data: memo } = await supabase
-    .from("ad_strategy_memos")
-    .select("author_id")
-    .eq("id", memoId)
-    .maybeSingle();
+  // 서로 의존하지 않는 두 조회라 나란히 보낸다(2026-09-17).
+  const [{ data: memo }, { data: profile }] = await Promise.all([
+    supabase.from("ad_strategy_memos").select("author_id").eq("id", memoId).maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+  ]);
   if (!memo) return { allowed: false };
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
   const allowed = memo.author_id === userId || profile?.role === "admin";
   return { allowed, authorId: memo.author_id };
 }
@@ -188,70 +223,18 @@ export async function updateMemo(
 
   if (error) return { error: `수정 실패: ${error.message}` };
 
+  // 지울 행을 삭제하면서 그 행의 파일 정보를 응답으로 함께 받아온다(조회 →
+  // 파일 삭제 → 행 삭제로 줄줄이 기다리던 것을 한 번의 왕복으로, 2026-09-17).
   if (removeAttachmentIds.length > 0) {
-    const { data: toRemove } = await supabase
+    const { data: removed } = await supabase
       .from("ad_strategy_memo_attachments")
-      .select("id, storage_path, drive_file_id")
-      .in("id", removeAttachmentIds);
-    if (toRemove?.length) {
-      const legacyPaths = toRemove.map((a) => a.storage_path).filter((p): p is string => Boolean(p));
-      if (legacyPaths.length) {
-        await supabase.storage.from("memo-attachments").remove(legacyPaths);
-      }
-      await Promise.all(
-        toRemove
-          .map((a) => a.drive_file_id)
-          .filter((id): id is string => Boolean(id))
-          .map((fileId) => deleteAttachmentFromDrive(fileId))
-      );
-      await supabase
-        .from("ad_strategy_memo_attachments")
-        .delete()
-        .in(
-          "id",
-          toRemove.map((a) => a.id)
-        );
-    }
+      .delete()
+      .in("id", removeAttachmentIds)
+      .select("storage_path, drive_file_id");
+    if (removed?.length) cleanUpMemoFilesAfterResponse(removed);
   }
 
-  let attachmentFailed = false;
-  const useDrive = await isGoogleDriveAttachmentsConfigured();
-  for (const file of files) {
-    if (useDrive) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const fileId = await uploadAttachmentToDrive("memo", file.name, bytes, file.type).catch((e) => {
-        console.error(`[updateMemo] 첨부파일 업로드 실패 (${file.name}):`, e instanceof Error ? e.message : e);
-        return null;
-      });
-      if (!fileId) {
-        attachmentFailed = true;
-        continue;
-      }
-      await supabase.from("ad_strategy_memo_attachments").insert({
-        memo_id: memoId,
-        file_name: file.name,
-        drive_file_id: fileId,
-        file_size: file.size,
-      });
-      continue;
-    }
-    const path = `${memoId}/${safeStorageFileName(file.name)}`;
-    const { error: uploadError } = await supabase.storage.from("memo-attachments").upload(path, file, {
-      contentType: file.type,
-    });
-    if (uploadError) {
-      attachmentFailed = true;
-      console.error(`[updateMemo] 첨부파일 업로드 실패 (${file.name}):`, uploadError.message);
-      continue;
-    }
-
-    await supabase.from("ad_strategy_memo_attachments").insert({
-      memo_id: memoId,
-      file_name: file.name,
-      storage_path: path,
-      file_size: file.size,
-    });
-  }
+  const { failed: attachmentFailed } = await uploadMemoAttachments(supabase, memoId, files, "updateMemo");
 
   revalidatePath(`/dashboard/memos/${memoId}`);
   revalidatePath("/dashboard/memos");
@@ -266,24 +249,15 @@ export async function deleteMemo(memoId: string, formData: FormData): Promise<vo
   const { allowed } = await canModifyMemo(supabase, user.id, memoId);
   if (!allowed) redirect(`/dashboard/memos/${memoId}`);
 
+  // 첨부 행은 메모 삭제 시 cascade로 함께 지워지므로, 실물 파일 경로만 미리
+  // 읽어두고 메모를 지운 뒤 파일 정리는 응답 이후로 미룬다(2026-09-17).
   const { data: attachments } = await supabase
     .from("ad_strategy_memo_attachments")
     .select("storage_path, drive_file_id")
     .eq("memo_id", memoId);
-  if (attachments?.length) {
-    const legacyPaths = attachments.map((a) => a.storage_path).filter((p): p is string => Boolean(p));
-    if (legacyPaths.length) {
-      await supabase.storage.from("memo-attachments").remove(legacyPaths);
-    }
-    await Promise.all(
-      attachments
-        .map((a) => a.drive_file_id)
-        .filter((id): id is string => Boolean(id))
-        .map((fileId) => deleteAttachmentFromDrive(fileId))
-    );
-  }
 
   await supabase.from("ad_strategy_memos").delete().eq("id", memoId);
+  cleanUpMemoFilesAfterResponse(attachments ?? []);
 
   revalidatePath("/dashboard/memos");
   redirect("/dashboard/memos");

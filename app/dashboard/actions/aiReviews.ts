@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuthedClient } from "@/lib/supabase/authed";
-import { formatMember } from "@/lib/formatMember";
+import { notifyTeamAfterResponse } from "@/lib/notifyTeam";
 
 const LIST_PATH = "/dashboard/ai-review";
 const MAX_CONTENT_SIZE = 2 * 1024 * 1024; // 2MB — Meeting Notes와 동일한 상한.
@@ -68,14 +68,12 @@ export async function createAiReview(
 
   if (error || !review) return { error: `저장 실패: ${error?.message ?? "알 수 없는 오류"}` };
 
-  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
-  const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
-  await supabase.from("notifications").insert({
+  notifyTeamAfterResponse(user, (actor) => ({
     type: "ai_review",
     title,
     message: `${actor}님이 AI Review를 등록했습니다.`,
     link: `/dashboard/ai-review/${review.id}`,
-  });
+  }));
 
   revalidatePath(LIST_PATH);
   redirect(`/dashboard/ai-review/${review.id}`);
@@ -86,9 +84,12 @@ async function canModifyReview(
   userId: string,
   reviewId: string
 ): Promise<boolean> {
-  const { data: review } = await supabase.from("ai_reviews").select("author_id").eq("id", reviewId).maybeSingle();
+  // 서로 의존하지 않는 두 조회라 나란히 보낸다(2026-09-17, Meeting Notes와 동일).
+  const [{ data: review }, { data: profile }] = await Promise.all([
+    supabase.from("ai_reviews").select("author_id").eq("id", reviewId).maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+  ]);
   if (!review) return false;
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
   return review.author_id === userId || profile?.role === "admin";
 }
 

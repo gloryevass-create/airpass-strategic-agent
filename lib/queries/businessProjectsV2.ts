@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database.types";
 import { formatMember } from "@/lib/formatMember";
 import { resolveHistoryAttachmentUrls, type HistoryAttachment } from "@/lib/historyAttachments";
+import { requireAuthedClient } from "@/lib/supabase/authed";
 
 type Client = SupabaseClient<Database>;
 
@@ -65,9 +66,13 @@ async function fetchAuthorDisplayById(supabase: Client): Promise<Map<string, str
 // 데이터라 admin 캐싱 없이 요청자의 세션 클라이언트로 매번 최신값을 읽는다
 // (product_catalog/partner_vendors와 동일한 패턴).
 export async function getBusinessProjectsV2(supabase: Client): Promise<BusinessProjectV2[]> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // 즐겨찾기(본인 것만)를 읽으려고 사용자 id가 필요한데, 예전엔 여기서
+  // supabase.auth.getUser()를 한 번 더 불렀다 — 이건 로컬 토큰 디코딩이 아니라
+  // Supabase Auth 서버 왕복이라(실측 56~150ms), 이미 인증을 마친 페이지가
+  // 부르는 함수에서 같은 검증을 또 기다리는 셈이었다(2026-09-17). 요청당 한 번만
+  // 실제로 검증하는 requireAuthedClient()(React cache로 감쌈)를 쓰면 이 호출은
+  // 같은 요청 안에서 이미 끝난 결과를 그대로 받는다.
+  const { user } = await requireAuthedClient();
 
   const [{ data }, { data: comments }, { data: history }, { data: attachments }, authorDisplayById, { data: favorites }] =
     await Promise.all([
@@ -86,9 +91,7 @@ export async function getBusinessProjectsV2(supabase: Client): Promise<BusinessP
       fetchAuthorDisplayById(supabase),
       // 즐겨찾기는 제품 카탈로그(0034)와 같은 방식 — 팀 공유 목록은 그대로 두고
       // 로그인한 본인 즐겨찾기만 조회한다(2026-09-12, Business 칸반·리스트 적용).
-      user
-        ? supabase.from("business_projects_v2_favorites").select("project_id").eq("user_id", user.id)
-        : Promise.resolve({ data: [] as { project_id: string }[] }),
+      supabase.from("business_projects_v2_favorites").select("project_id").eq("user_id", user.id),
     ]);
 
   const favoriteIds = new Set((favorites ?? []).map((f) => f.project_id));

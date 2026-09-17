@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuthedClient } from "@/lib/supabase/authed";
-import { formatMember } from "@/lib/formatMember";
+import { notifyTeamAfterResponse } from "@/lib/notifyTeam";
 import { resolveHistoryAttachments, validateHistoryAttachmentFiles } from "@/lib/historyAttachments";
 
 const PATH = "/dashboard/marketing-tasks";
@@ -50,9 +50,7 @@ export async function createMarketingTask(
   const { data: inserted, error } = await supabase.from("marketing_tasks").insert(fields).select("id").single();
   if (error) return { error: `저장 실패: ${error.message}` };
 
-  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
-  const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
-  await supabase.from("notifications").insert({
+  notifyTeamAfterResponse(user, (actor) => ({
     type: "marketing",
     title: fields.title,
     message: `${actor}님이 새 마케팅 업무를 등록했습니다.`,
@@ -60,7 +58,7 @@ export async function createMarketingTask(
     // 붙인다(2026-09-16, 사용자 요청) — IndustryMarketingBoard.tsx가 마운트
     // 시 이 쿼리를 읽어 editingId를 채운다.
     link: `${PATH}?open=${inserted.id}`,
-  });
+  }));
 
   revalidatePath(PATH);
   return undefined;
