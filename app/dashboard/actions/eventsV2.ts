@@ -1,12 +1,30 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireAuthedClient } from "@/lib/supabase/authed";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMember } from "@/lib/formatMember";
 import { getValidGoogleAccessToken } from "@/lib/queries/googleCalendar";
 import { insertGoogleCalendarEvent, updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from "@/lib/googleCalendar/api";
 
 const PATH = "/dashboard/calendar";
+
+// 일정 등록/수정 체감 속도 개선(2026-09-17, 사용자 요청) — "저장"을 누른 뒤
+// 다이얼로그가 닫히기까지 걸리는 시간은 서버 액션이 끝날 때까지의 왕복 지연
+// 전체다. 예전엔 팀 알림 생성(profiles 조회 + notifications insert)과 구글
+// 캘린더 동기화(토큰 조회/갱신 + 구글 API 호출 + 후속 update)까지 전부 그
+// 안에서 순차로 처리해서, 실측으로 Supabase 왕복 1회당 80~250ms · 구글 API는
+// 그보다 더 걸리는 상황에서 5~6번을 줄줄이 기다려야 했다. 이 부수 효과들은
+// 모두 "실패해도 일정 저장 자체는 성공"으로 이미 취급하던 것들이라
+// Next 16의 after()로 응답 이후로 미뤘다 — 사용자가 기다리는 구간은
+// 인증 + insert/update 두 번의 왕복만 남는다.
+//
+// after() 안에서는 요청 세션 클라이언트를 쓰지 않는다 — 응답이 끝난 뒤라
+// @supabase/ssr이 갱신된 세션 쿠키를 다시 쓸 수 없고(쿠키 쓰기 시점이 지남),
+// notifications insert처럼 RLS만 통과하면 되는 작업은 service_role로 하는 게
+// 안전하다. 대신 "누가" 하는 작업인지는 항상 응답 전에 확인한 user.id로만
+// 판단한다(권한 판단을 admin 클라이언트에 맡기지 않는다).
 
 // 알림 링크에 그 일정이 속한 월/날짜를 함께 실어 보내려고 KST 날짜 문자열로
 // 바꾼다(2026-09-16) — date_start는 UTC ISO라 그대로 slice하면 하루 밀릴 수
@@ -119,35 +137,42 @@ export async function createTeamEventV2(
   const { data: inserted, error } = await supabase.from("team_events_v2").insert(fields).select("id").single();
   if (error) return { error: `저장 실패: ${error.message}` };
 
-  // 구글 캘린더 등록은 부가 기능이라 실패해도 팀 일정 저장 자체는 성공으로
-  // 처리한다(연결 해제됐거나 토큰 만료 등) — 콘솔에만 남긴다.
-  if (destination === "both") {
-    try {
-      const accessToken = await getValidGoogleAccessToken(supabase, user.id);
-      if (accessToken) {
-        const googleEventId = await insertGoogleCalendarEvent(accessToken, googleEventInputFrom(fields));
-        await supabase
-          .from("team_events_v2")
-          .update({ google_event_id: googleEventId, google_event_owner_id: user.id })
-          .eq("id", inserted.id);
-      }
-    } catch (e) {
-      console.error("[createTeamEventV2] 구글 캘린더 등록 실패:", e instanceof Error ? e.message : e);
-    }
-  }
+  // 여기까지가 사용자가 기다리는 구간 — 아래 두 부수 효과(구글 캘린더 등록,
+  // 팀 알림)는 실패해도 일정 저장 자체는 성공으로 처리하던 것들이라 응답
+  // 이후로 미룬다(위 after() 주석 참고).
+  after(async () => {
+    const admin = createAdminClient();
 
-  const { data: profile } = await supabase.from("profiles").select("name, email").eq("id", user.id).single();
-  const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
-  // 알림을 누르면 목록만 뜨는 게 아니라 이 일정이 있는 달로 이동해 상세
-  // 팝업까지 바로 열리게 month/day/eventId를 함께 실어 보낸다(2026-09-16,
-  // 사용자 요청) — IndustryEventCalendar.tsx가 마운트 시 이 쿼리를 읽어
-  // editing을 채운다.
-  const day = kstDateStrFromIso(fields.date_start);
-  await supabase.from("notifications").insert({
-    type: "event",
-    title: fields.title,
-    message: `${actor}님이 새 일정을 등록했습니다.`,
-    link: `${PATH}?month=${day.slice(0, 7)}&day=${day}&eventId=${inserted.id}`,
+    // 구글 캘린더 등록은 부가 기능이라 실패해도 팀 일정 저장 자체는 성공으로
+    // 처리한다(연결 해제됐거나 토큰 만료 등) — 콘솔에만 남긴다.
+    if (destination === "both") {
+      try {
+        const accessToken = await getValidGoogleAccessToken(admin, user.id);
+        if (accessToken) {
+          const googleEventId = await insertGoogleCalendarEvent(accessToken, googleEventInputFrom(fields));
+          await admin
+            .from("team_events_v2")
+            .update({ google_event_id: googleEventId, google_event_owner_id: user.id })
+            .eq("id", inserted.id);
+        }
+      } catch (e) {
+        console.error("[createTeamEventV2] 구글 캘린더 등록 실패:", e instanceof Error ? e.message : e);
+      }
+    }
+
+    const { data: profile } = await admin.from("profiles").select("name, email").eq("id", user.id).single();
+    const actor = formatMember(profile?.name ?? null, null, profile?.email ?? user.email ?? "");
+    // 알림을 누르면 목록만 뜨는 게 아니라 이 일정이 있는 달로 이동해 상세
+    // 팝업까지 바로 열리게 month/day/eventId를 함께 실어 보낸다(2026-09-16,
+    // 사용자 요청) — IndustryEventCalendar.tsx가 마운트 시 이 쿼리를 읽어
+    // editing을 채운다.
+    const day = kstDateStrFromIso(fields.date_start);
+    await admin.from("notifications").insert({
+      type: "event",
+      title: fields.title,
+      message: `${actor}님이 새 일정을 등록했습니다.`,
+      link: `${PATH}?month=${day.slice(0, 7)}&day=${day}&eventId=${inserted.id}`,
+    });
   });
 
   revalidatePath(PATH);
@@ -167,24 +192,42 @@ export async function updateTeamEventV2(
   if (!fields.title) return { error: "일정 제목을 입력하세요." };
   if (!fields.date_start) return { error: "일시를 입력하세요." };
 
-  const { data: existing } = await supabase
+  const wantsGoogleSync = destinationFromForm(formData) === "both";
+
+  const { error } = await supabase
     .from("team_events_v2")
-    .select("google_event_id, google_event_owner_id")
-    .eq("id", id)
-    .maybeSingle();
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq("id", id);
 
-  // 이 일정을 구글 캘린더에 등록한 적이 없거나, 등록한 사람이 지금 수정하는
-  // 본인일 때만 구글 쪽도 같이 건드린다 — 남이 등록해 둔 걸 내 세션 토큰으로
-  // 고칠 수는 없으므로(권한 없음), 그런 경우 구글 이벤트는 그대로 두고 우리
-  // DB 필드만 갱신한다.
-  const canTouchGoogle = !existing?.google_event_owner_id || existing.google_event_owner_id === user.id;
-  let googleFieldUpdates: { google_event_id?: string | null; google_event_owner_id?: string | null } = {};
+  if (error) return { error: `저장 실패: ${error.message}` };
 
-  if (canTouchGoogle) {
-    const wantsGoogleSync = destinationFromForm(formData) === "both";
+  // 구글 캘린더 동기화는 원래도 실패를 콘솔에만 남기는 부가 기능이었고, 구글
+  // API 왕복이 가장 느린 구간이라 통째로 응답 이후로 미룬다(위 after() 주석
+  // 참고). 예전엔 이 일정이 구글과 무관해도(연결된 이벤트 없음 + 동기화
+  // 안 함) 토큰 조회/갱신을 먼저 해버려서 그냥 버리는 왕복이 있었는데,
+  // 이제 실제로 구글을 건드려야 할 때만 토큰을 가져온다.
+  after(async () => {
+    const admin = createAdminClient();
+
+    const { data: existing } = await admin
+      .from("team_events_v2")
+      .select("google_event_id, google_event_owner_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    // 이 일정을 구글 캘린더에 등록한 적이 없거나, 등록한 사람이 지금 수정하는
+    // 본인일 때만 구글 쪽도 같이 건드린다 — 남이 등록해 둔 걸 내 토큰으로
+    // 고칠 수는 없으므로(권한 없음), 그런 경우 구글 이벤트는 그대로 두고 우리
+    // DB 필드도 손대지 않는다.
+    const canTouchGoogle = !existing?.google_event_owner_id || existing.google_event_owner_id === user.id;
+    if (!canTouchGoogle) return;
+    if (!wantsGoogleSync && !existing?.google_event_id) return;
+
+    let googleFieldUpdates: { google_event_id?: string | null; google_event_owner_id?: string | null } = {};
     try {
-      const accessToken = await getValidGoogleAccessToken(supabase, user.id);
-      if (accessToken && wantsGoogleSync) {
+      const accessToken = await getValidGoogleAccessToken(admin, user.id);
+      if (!accessToken) return;
+      if (wantsGoogleSync) {
         const input = googleEventInputFrom(fields);
         if (existing?.google_event_id) {
           await updateGoogleCalendarEvent(accessToken, existing.google_event_id, input);
@@ -193,21 +236,19 @@ export async function updateTeamEventV2(
           const googleEventId = await insertGoogleCalendarEvent(accessToken, input);
           googleFieldUpdates = { google_event_id: googleEventId, google_event_owner_id: user.id };
         }
-      } else if (accessToken && !wantsGoogleSync && existing?.google_event_id) {
+      } else if (existing?.google_event_id) {
         await deleteGoogleCalendarEvent(accessToken, existing.google_event_id);
         googleFieldUpdates = { google_event_id: null, google_event_owner_id: null };
       }
     } catch (e) {
       console.error("[updateTeamEventV2] 구글 캘린더 동기화 실패:", e instanceof Error ? e.message : e);
+      return;
     }
-  }
 
-  const { error } = await supabase
-    .from("team_events_v2")
-    .update({ ...fields, ...googleFieldUpdates, updated_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (error) return { error: `저장 실패: ${error.message}` };
+    if (Object.keys(googleFieldUpdates).length > 0) {
+      await admin.from("team_events_v2").update(googleFieldUpdates).eq("id", id);
+    }
+  });
 
   revalidatePath(PATH);
   return undefined;
@@ -216,21 +257,29 @@ export async function updateTeamEventV2(
 export async function deleteTeamEventV2(id: string): Promise<void> {
   const { supabase, user } = await requireAuthedClient();
 
-  const { data: existing } = await supabase
+  // 삭제된 행의 구글 연결 정보를 응답에 실어 받는다(delete().select()) — 예전엔
+  // 구글 이벤트 id를 알아내려고 삭제 전에 select를 한 번 더 했는데, 행이 사라지기
+  // 전에 알아야 하는 값이라는 것만 지키면 한 번의 왕복으로 충분하다.
+  const { data: deleted } = await supabase
     .from("team_events_v2")
-    .select("google_event_id, google_event_owner_id")
+    .delete()
     .eq("id", id)
+    .select("google_event_id, google_event_owner_id")
     .maybeSingle();
 
-  if (existing?.google_event_id && existing.google_event_owner_id === user.id) {
-    try {
-      const accessToken = await getValidGoogleAccessToken(supabase, user.id);
-      if (accessToken) await deleteGoogleCalendarEvent(accessToken, existing.google_event_id);
-    } catch (e) {
-      console.error("[deleteTeamEventV2] 구글 캘린더 삭제 실패:", e instanceof Error ? e.message : e);
-    }
+  // 등록한 사람(owner) 본인만 자기 구글 캘린더의 이벤트를 지울 수 있다.
+  // 구글 왕복은 삭제 성공/실패와 무관한 부가 처리라 응답 이후로 미룬다.
+  if (deleted?.google_event_id && deleted.google_event_owner_id === user.id) {
+    const googleEventId = deleted.google_event_id;
+    after(async () => {
+      try {
+        const accessToken = await getValidGoogleAccessToken(createAdminClient(), user.id);
+        if (accessToken) await deleteGoogleCalendarEvent(accessToken, googleEventId);
+      } catch (e) {
+        console.error("[deleteTeamEventV2] 구글 캘린더 삭제 실패:", e instanceof Error ? e.message : e);
+      }
+    });
   }
 
-  await supabase.from("team_events_v2").delete().eq("id", id);
   revalidatePath(PATH);
 }
