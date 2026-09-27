@@ -2716,18 +2716,20 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: {
-      // profiles의 select RLS를 우회해 id/name만 노출하는 뷰(0067) —
-      // lib/queries/teamMembers.ts::getTeamMemberNames() 전용.
+    Views: Record<string, never>;
+    Functions: {
+      // profiles의 select RLS를 우회해 id/name만 돌려주는 함수(0080) —
+      // lib/queries/teamMembers.ts::getTeamMemberNames() 전용. 원래 뷰였는데
+      // Supabase Advisor의 "Security Definer View" 경고를 받아 함수로 바꿨다
+      // (노출 범위는 동일, 0080 주석 참고).
       team_member_names: {
-        Row: {
+        Args: Record<string, never>;
+        Returns: {
           id: string;
           name: string | null;
-        };
-        Relationships: [];
+        }[];
       };
     };
-    Functions: Record<string, never>;
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
