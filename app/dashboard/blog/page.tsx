@@ -10,6 +10,8 @@ import { ContentMatchedKeywordTable } from "@/components/dashboard/ContentMatche
 import { AiKeywordStrategyComment } from "@/components/dashboard/AiKeywordStrategyComment";
 import { ReportsList } from "@/components/dashboard/ReportsList";
 import { CompetitorBlogManager } from "@/components/dashboard/CompetitorBlogManager";
+import { KeywordRankingPanel } from "@/components/dashboard/KeywordRankingPanel";
+import { getKeywordRanking, getLatestRankingDate, getRankedKeywords } from "@/lib/queries/blogRankings";
 
 // AI 키워드 전략 코멘트는 실제로 Claude를 호출해서 1~2초 이상 걸린다 — 페이지 전체를
 // 기다리게 하지 않도록 별도 컴포넌트로 분리해 Suspense로 스트리밍한다.
@@ -43,12 +45,27 @@ function KeywordStrategySkeleton() {
   );
 }
 
-export default async function BlogPage() {
+// 키워드별 검색순위 섹션은 URL의 ?keywordId=로 어떤 키워드를 볼지 정한다(2026-09-27) —
+// 조회 조건이라 뒤로가기가 동작하고 링크 공유도 되게 하려고 화면 상태 대신 URL에 둔다.
+type SearchParams = Promise<{ keywordId?: string }>;
+
+export default async function BlogPage({ searchParams }: { searchParams: SearchParams }) {
+  const { keywordId } = await searchParams;
   const { supabase } = await requireAuthedClient();
-  const [dashboard, competitors] = await Promise.all([
+  const [dashboard, competitors, rankingDate] = await Promise.all([
     getDashboardData(supabase),
     getActiveCompetitors(supabase),
+    getLatestRankingDate(supabase),
   ]);
+
+  // 순위 기준일은 "오늘"이 아니라 순위 데이터가 있는 가장 최근 날짜다 — 수집이 하루
+  // 밀려도 화면이 비지 않게(대시보드 전체가 쓰는 latestDate 규칙과 같은 취지).
+  const rankedKeywords = rankingDate ? await getRankedKeywords(supabase, rankingDate) : [];
+  // 키워드를 안 골랐으면 우리 순위가 가장 좋은 키워드를 기본으로 보여준다(목록이 그 순서로
+  // 정렬돼 있어 첫 항목이 곧 그것).
+  const selectedKeywordId = keywordId ?? rankedKeywords[0]?.keywordId ?? null;
+  const ranking =
+    rankingDate && selectedKeywordId ? await getKeywordRanking(supabase, rankingDate, selectedKeywordId) : null;
 
   const blogReports = dashboard.reports.filter((r) => r.track !== "ad");
 
@@ -106,6 +123,18 @@ export default async function BlogPage() {
               건수입니다.
             </p>
           </div>
+        </section>
+
+        <section className="card" style={{ background: "#ffffff", borderRadius: 8, boxShadow: "var(--shadow-sm)" }}>
+          <h2 style={{ margin: "0 0 var(--space-3)", display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }} className="text-muted">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" />
+              <path d="M3 12h12" />
+              <path d="M3 18h6" />
+            </svg>
+            키워드별 검색순위 — 이 키워드는 누가 차지하고 있나
+          </h2>
+          <KeywordRankingPanel keywords={rankedKeywords} ranking={ranking} date={rankingDate} />
         </section>
 
         <section>

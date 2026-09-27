@@ -381,6 +381,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      blog_serp_rankings: {
+        Row: {
+          id: string;
+          date: string;
+          keyword_id: string;
+          rank: number;
+          blog_id: string | null;
+          blogger_name: string | null;
+          post_url: string | null;
+          post_title: string | null;
+          post_date: string | null;
+          collected_at: string;
+        };
+        Insert: {
+          id?: string;
+          date: string;
+          keyword_id: string;
+          rank: number;
+          blog_id?: string | null;
+          blogger_name?: string | null;
+          post_url?: string | null;
+          post_title?: string | null;
+          post_date?: string | null;
+          collected_at?: string;
+        };
+        Update: {
+          id?: string;
+          date?: string;
+          keyword_id?: string;
+          rank?: number;
+          blog_id?: string | null;
+          blogger_name?: string | null;
+          post_url?: string | null;
+          post_title?: string | null;
+          post_date?: string | null;
+          collected_at?: string;
+        };
+        Relationships: [];
+      };
       blog_sov_daily: {
         Row: {
           id: string;
