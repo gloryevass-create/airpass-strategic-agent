@@ -391,6 +391,7 @@ export type Database = {
           blogger_name: string | null;
           post_url: string | null;
           post_title: string | null;
+          post_description: string | null;
           post_date: string | null;
           collected_at: string;
         };
@@ -403,6 +404,7 @@ export type Database = {
           blogger_name?: string | null;
           post_url?: string | null;
           post_title?: string | null;
+          post_description?: string | null;
           post_date?: string | null;
           collected_at?: string;
         };
@@ -415,6 +417,7 @@ export type Database = {
           blogger_name?: string | null;
           post_url?: string | null;
           post_title?: string | null;
+          post_description?: string | null;
           post_date?: string | null;
           collected_at?: string;
         };

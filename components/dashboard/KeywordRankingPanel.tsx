@@ -193,15 +193,20 @@ export function KeywordRankingPanel({
         </span>
       </div>
 
-      {selected && (
+      {selected && ranking && (
         <p style={{ margin: 0, fontSize: 13 }}>
-          {selected.bestTrackedRank != null ? (
+          {ranking.rows.length === 0 ? (
+            <span className="text-muted">
+              검색 결과 {ranking.apiResultCount}개 중 이 키워드를 실제로 언급한 글이 하나도 없습니다 — 네이버
+              오픈API가 무관한 글만 돌려준 경우입니다(아래 설명 참고).
+            </span>
+          ) : selected.bestTrackedRank != null ? (
             <>
               <strong>{selected.bestTrackedName}</strong>가 <strong>{selected.bestTrackedRank}위</strong>
-              {selected.trackedCount > 1 && ` (상위 10위 안에 우리·경쟁사 글 ${selected.trackedCount}건)`}
+              {selected.trackedCount > 1 && ` (관련 글 ${ranking.rows.length}건 중 우리·경쟁사 ${selected.trackedCount}건)`}
             </>
           ) : (
-            <span className="text-muted">이 키워드의 상위 10위 안에 우리도 경쟁사도 없습니다.</span>
+            <span className="text-muted">관련 글 {ranking.rows.length}건 안에 우리도 경쟁사도 없습니다.</span>
           )}
         </p>
       )}
@@ -211,6 +216,7 @@ export function KeywordRankingPanel({
           <thead>
             <tr>
               <th style={{ width: 52 }}>순위</th>
+              <th style={{ width: 76 }}>API 원순위</th>
               <th>블로그</th>
               <th>글 제목</th>
               <th style={{ width: 104 }}>발행일</th>
@@ -224,6 +230,13 @@ export function KeywordRankingPanel({
               >
                 <td data-label="순위" style={{ fontVariantNumeric: "tabular-nums", fontWeight: row.trackedName ? 700 : 400 }}>
                   {row.rank}위
+                </td>
+                <td
+                  data-label="API 원순위"
+                  className="text-muted"
+                  style={{ fontVariantNumeric: "tabular-nums", fontSize: 12 }}
+                >
+                  {row.apiRank}위
                 </td>
                 <td className="list-cell-title" style={{ fontWeight: row.trackedName ? 700 : 400 }}>
                   {row.displayName}
@@ -251,11 +264,32 @@ export function KeywordRankingPanel({
         </table>
       )}
 
-      <p className="text-muted" style={{ margin: 0, fontSize: 11 }}>
-        * 네이버 블로그 검색 상위 10개를 그대로 보여줍니다 — 우리가 추적하지 않는 블로그(티스토리 등)도
-        포함합니다. 위 SOV 차트의 백분율은 이 10개가 아니라 <strong>네이버 블로그만</strong>을 분모로
-        계산한 값이라 숫자가 다를 수 있습니다. 검색 순위는 보는 사람·기기·시간에 따라 달라집니다.
-      </p>
+      <div
+        style={{
+          borderLeft: "3px solid var(--color-accent)",
+          background: "color-mix(in srgb, var(--color-accent) 6%, #ffffff)",
+          padding: "var(--space-2) var(--space-3)",
+          fontSize: 11,
+          lineHeight: 1.7,
+        }}
+      >
+        <strong>⚠️ 이 순위는 실제 네이버 검색 화면의 순위와 다릅니다.</strong>
+        <br />
+        여기 숫자는 네이버가 제공하는 <strong>검색 오픈API</strong>가 돌려준 결과이고, 브라우저에서 직접
+        검색했을 때 보이는 화면과 <strong>별개의 순서</strong>입니다. 실측(2026-09-27)으로 &ldquo;아이핏9988&rdquo;을
+        실제 검색하면 에어패스가 1위인데 API는 7위로 줬고, 상위 10개 중 6개가 안경점·필라테스처럼 전혀 무관한
+        글이었습니다.
+        <br />
+        그래서 <strong>제목·본문에 그 키워드가 실제로 들어간 글만 남겨 다시 번호를 매긴 값</strong>을
+        &ldquo;순위&rdquo;로 보여주고, API가 준 원래 위치는 &ldquo;API 원순위&rdquo;에 함께 적었습니다. 이렇게 걸러도
+        네이버의 진짜 노출 순위는 아니므로, <strong>추세를 보는 참고값</strong>으로만 쓰시고 중요한 판단 전에는
+        직접 검색해 확인하세요.
+        <br />
+        <span className="text-muted">
+          추적하지 않는 블로그(티스토리 등)도 그대로 포함합니다. 위 SOV 차트의 백분율은 필터 전 결과 중
+          네이버 블로그만을 분모로 계산한 값이라 이 표와 숫자가 다릅니다.
+        </span>
+      </div>
     </div>
   );
 }
