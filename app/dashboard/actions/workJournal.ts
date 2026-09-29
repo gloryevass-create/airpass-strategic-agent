@@ -5,50 +5,68 @@ import { after } from "next/server";
 import { requireAuthedClient } from "@/lib/supabase/authed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyTeamAfterResponseAs } from "@/lib/notifyTeam";
+import { deleteAttachmentFromDrive, driveFileViewUrl } from "@/lib/googleDriveAttachments";
 import {
-  deleteAttachmentFromDrive,
-  driveFileViewUrl,
-  isGoogleDriveAttachmentsConfigured,
-  uploadAttachmentToDrive,
-} from "@/lib/googleDriveAttachments";
-import { safeStorageFileName } from "@/lib/storageKey";
+  WORK_JOURNAL_BUCKET,
+  validateAttachmentFiles,
+  type UploadedAttachment,
+} from "@/lib/workJournalAttachments";
 
 const PATH = "/dashboard/work-journal";
-const BUCKET = "journal-attachments";
+const BUCKET = WORK_JOURNAL_BUCKET;
 
-// 첨부파일 업로드 제약은 Memo Board와 동일(이미지/PDF/Office 문서/ZIP, 12MB, 최대 5개) —
-// 첨부 제약 정책을 앱 전체에서 통일한다(사용자 확인, 2026-08-23 Memo Board 논의 참고).
-const ATTACHMENT_ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/zip",
-  "application/x-zip-compressed",
-];
-const ATTACHMENT_MAX_SIZE = 12 * 1024 * 1024;
-const ATTACHMENT_MAX_COUNT = 5;
+/** 첨부파일은 2026-09-29부터 **브라우저가 Supabase Storage로 직접 올리고**, 이
+ * 액션은 "어디에 올렸는지"만 받아 DB 행을 만든다 — 이유는
+ * lib/workJournalUpload.ts의 주석 참고(Server Action 1MB / Vercel 4.5MB 상한을
+ * 우회해 20MB 첨부를 가능하게 하려면 이 방법뿐이다).
+ *
+ * 그래서 여기서 검사하는 크기·형식은 브라우저가 알려준 값이다. 진짜로 거부하는
+ * 쪽은 Storage 버킷의 file_size_limit/allowed_mime_types(마이그레이션 0081)다.
+ * 이 검사는 DB에 들어가는 값이 화면 안내와 어긋나지 않게 하는 용도. */
+function uploadedFromForm(formData: FormData): UploadedAttachment[] {
+  const raw = String(formData.get("uploadedAttachments") ?? "").trim();
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item) => {
+      if (typeof item !== "object" || item === null) return [];
+      const { path, fileName, contentType, size } = item as Record<string, unknown>;
+      if (typeof path !== "string" || !path || typeof fileName !== "string" || !fileName) return [];
+      return [{
+        path,
+        fileName,
+        contentType: typeof contentType === "string" ? contentType : "",
+        size: typeof size === "number" ? size : 0,
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
 
-function validateFiles(files: File[]): string | null {
-  if (files.length > ATTACHMENT_MAX_COUNT) {
-    return `첨부파일은 한 번에 최대 ${ATTACHMENT_MAX_COUNT}개까지 올릴 수 있습니다.`;
-  }
-  for (const file of files) {
-    if (!ATTACHMENT_ALLOWED_TYPES.includes(file.type)) {
-      return `${file.name}: 이미지·PDF·Office 문서·ZIP 파일만 올릴 수 있습니다.`;
+function attachmentRows(entryId: string, uploaded: UploadedAttachment[]) {
+  return uploaded.map((u) => ({
+    entry_id: entryId,
+    file_name: u.fileName,
+    content_type: u.contentType || null,
+    drive_file_id: null,
+    storage_path: u.path,
+  }));
+}
+
+/** 저장이 막히면 이미 올라간 파일이 쓸 데 없이 남으므로 지운다. 브라우저도
+ * 같은 정리를 하지만(응답의 error를 보고), 서버에서 막힌 경우 브라우저가
+ * 그 사이 닫혔을 수 있어 여기서도 한 번 정리한다. */
+function discardUploadedFiles(uploaded: UploadedAttachment[]): void {
+  if (uploaded.length === 0) return;
+  after(async () => {
+    try {
+      await createAdminClient().storage.from(BUCKET).remove(uploaded.map((u) => u.path));
+    } catch (e) {
+      console.error("[workJournal] 미사용 첨부파일 정리 실패:", e instanceof Error ? e.message : e);
     }
-    if (file.size > ATTACHMENT_MAX_SIZE) {
-      return `${file.name}: 파일은 12MB 이하만 올릴 수 있습니다.`;
-    }
-  }
-  return null;
+  });
 }
 
 export type WorkJournalFormState = { error?: string } | undefined;
@@ -72,59 +90,39 @@ export async function createWorkJournalEntry(
   if (!fields.author_name) return { error: "작성자를 선택하세요." };
   if (!fields.content) return { error: "내용을 입력하세요." };
 
-  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  const fileError = validateFiles(files);
-  if (fileError) return { error: fileError };
+  // 브라우저가 이미 Storage에 올려둔 파일들의 위치. 검사에 걸리면 저장을
+  // 시작하기 전에 그 파일부터 지운다(고아 파일 방지).
+  const uploaded = uploadedFromForm(formData);
+  const fileError = validateAttachmentFiles(
+    uploaded.map((u) => ({ name: u.fileName, type: u.contentType, size: u.size }))
+  );
+  if (fileError) {
+    discardUploadedFiles(uploaded);
+    return { error: fileError };
+  }
 
-  // 일지 저장과 "구글드라이브가 설정돼 있는지"(DB 조회) 확인은 서로 무관하니
-  // 나란히 보낸다 — 첨부가 없으면 아예 확인하지 않는다(2026-09-17).
-  const [{ data: entry, error }, useDrive] = await Promise.all([
-    supabase.from("work_journal_entries").insert(fields).select("id").single(),
-    files.length > 0 ? isGoogleDriveAttachmentsConfigured() : Promise.resolve(false),
-  ]);
-  if (error || !entry) return { error: `저장 실패: ${error?.message ?? "알 수 없는 오류"}` };
+  const { data: entry, error } = await supabase
+    .from("work_journal_entries")
+    .insert(fields)
+    .select("id")
+    .single();
+  if (error || !entry) {
+    discardUploadedFiles(uploaded);
+    return { error: `저장 실패: ${error?.message ?? "알 수 없는 오류"}` };
+  }
 
-  // 예전엔 파일 하나를 올리고 그 행을 insert한 뒤 다음 파일로 넘어가서, 첨부
-  // 5개(상한)면 업로드 5회 + insert 5회가 순서대로 쌓였다 — 업로드는 나란히
-  // 하고 행은 한 번에 insert한다(2026-09-17). 개별 파일 실패는 예전처럼
-  // 조용히 건너뛰고 일지 저장 자체는 성공으로 둔다.
-  if (files.length > 0) {
-    const rows = await Promise.all(
-      files.map(async (file) => {
-        if (useDrive) {
-          const bytes = new Uint8Array(await file.arrayBuffer());
-          const fileId = await uploadAttachmentToDrive("journal", file.name, bytes, file.type).catch((e) => {
-            console.error(`[createWorkJournalEntry] 첨부파일 업로드 실패 (${file.name}):`, e instanceof Error ? e.message : e);
-            return null;
-          });
-          if (!fileId) return null;
-          return {
-            entry_id: entry.id,
-            file_name: file.name,
-            content_type: file.type,
-            drive_file_id: fileId,
-            storage_path: null,
-          };
-        }
-        const path = `${entry.id}/${safeStorageFileName(file.name)}`;
-        const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
-          contentType: file.type,
-        });
-        if (uploadError) {
-          console.error(`[createWorkJournalEntry] 첨부파일 업로드 실패 (${file.name}):`, uploadError.message);
-          return null;
-        }
-        return {
-          entry_id: entry.id,
-          file_name: file.name,
-          content_type: file.type,
-          drive_file_id: null,
-          storage_path: path,
-        };
-      })
-    );
-    const inserted = rows.filter((r): r is NonNullable<typeof r> => r !== null);
-    if (inserted.length > 0) await supabase.from("work_journal_attachments").insert(inserted);
+  if (uploaded.length > 0) {
+    const { error: attachError } = await supabase
+      .from("work_journal_attachments")
+      .insert(attachmentRows(entry.id, uploaded));
+    // 예전엔 개별 파일 실패를 조용히 삼켰지만, 이제 바이트는 이미 다 올라간
+    // 뒤라 여기서 실패하는 건 DB 문제뿐이다 — 조용히 넘기면 사용자는 첨부가
+    // 붙은 줄 알게 되므로 그대로 알린다(일지 본문은 이미 저장됐다는 것도 함께).
+    if (attachError) {
+      discardUploadedFiles(uploaded);
+      revalidatePath(PATH);
+      return { error: `일지는 저장됐지만 첨부파일 연결에 실패했습니다: ${attachError.message}` };
+    }
   }
 
   // 워크스페이스 다른 게시판(Memo Board/Meeting Notes 등)과 마찬가지로 새
@@ -157,11 +155,46 @@ export async function updateWorkJournalEntry(
   if (!fields.author_name) return { error: "작성자를 선택하세요." };
   if (!fields.content) return { error: "내용을 입력하세요." };
 
+  // 🐛 2026-09-29 수정: 예전엔 이 액션이 formData의 파일을 아예 읽지 않아
+  // 수정 화면에서 첨부를 추가해도 조용히 사라졌다(오류도 안 났다). 등록과
+  // 똑같이 처리한다.
+  const uploaded = uploadedFromForm(formData);
+
+  // 개수 상한은 "이미 붙어 있는 것 + 이번에 추가하는 것"으로 센다.
+  const { count: existingCount } = uploaded.length
+    ? await supabase
+        .from("work_journal_attachments")
+        .select("id", { count: "exact", head: true })
+        .eq("entry_id", id)
+    : { count: 0 };
+  const fileError = validateAttachmentFiles(
+    uploaded.map((u) => ({ name: u.fileName, type: u.contentType, size: u.size })),
+    existingCount ?? 0
+  );
+  if (fileError) {
+    discardUploadedFiles(uploaded);
+    return { error: fileError };
+  }
+
   const { error } = await supabase
     .from("work_journal_entries")
     .update({ ...fields, updated_at: new Date().toISOString() })
     .eq("id", id);
-  if (error) return { error: `저장 실패: ${error.message}` };
+  if (error) {
+    discardUploadedFiles(uploaded);
+    return { error: `저장 실패: ${error.message}` };
+  }
+
+  if (uploaded.length > 0) {
+    const { error: attachError } = await supabase
+      .from("work_journal_attachments")
+      .insert(attachmentRows(id, uploaded));
+    if (attachError) {
+      discardUploadedFiles(uploaded);
+      revalidatePath(PATH);
+      return { error: `일지는 저장됐지만 첨부파일 연결에 실패했습니다: ${attachError.message}` };
+    }
+  }
 
   revalidatePath(PATH);
   return undefined;

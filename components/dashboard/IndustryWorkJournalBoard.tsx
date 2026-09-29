@@ -10,6 +10,15 @@ import {
   deleteWorkJournalAttachment,
   getWorkJournalAttachmentUrls,
 } from "@/app/dashboard/actions/workJournal";
+import { uploadWorkJournalFiles, deleteUploadedWorkJournalFiles } from "@/lib/workJournalUpload";
+import {
+  WORK_JOURNAL_ALLOWED_TYPES,
+  WORK_JOURNAL_ATTACHMENT_HINT,
+  WORK_JOURNAL_MAX_COUNT,
+  formatFileSize,
+  validateAttachmentFile,
+  validateAttachmentFiles,
+} from "@/lib/workJournalAttachments";
 
 // Business/Cooperation/Marketing과 같은 Claude Design "Industry" 테마를 그대로
 // 적용했다(2026-08-29). 데이터·서버 액션은 기존 Work Journal 그대로, 화면만
@@ -68,6 +77,155 @@ function weekLabelFromDate(dateStr: string): string {
   return `${y.slice(2)}년 ${m}월`;
 }
 
+/* ─────────────────────────── 파일 선택(누적 + 드래그앤드롭) ─────────────────────────── */
+
+/** 네이티브 <input type="file" multiple>은 "한 번에 여러 개"는 고를 수 있지만
+ * 탐색창을 다시 열면 앞서 고른 것이 **교체**된다 — 그래서 서로 다른 폴더에 있는
+ * 파일을 모아 붙일 방법이 없었다(사용자 지적, 2026-09-29: "같은 폴더 안에 있는
+ * 것만 가능"). 고른 파일을 React state에 쌓아두고 input은 매번 비워서, 여러 번
+ * 나눠 고르든 드래그해서 떨어뜨리든 계속 누적되게 한다. */
+function FilePicker({
+  files,
+  onChange,
+  existingCount,
+  disabled,
+}: {
+  files: File[];
+  onChange: (next: File[]) => void;
+  existingCount: number;
+  disabled: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // 드래그가 자식 요소 위를 지날 때마다 dragleave가 떠서 테두리가 깜빡이므로
+  // 들어온/나간 횟수를 세서 0이 될 때만 해제한다.
+  const dragDepth = useRef(0);
+
+  const remaining = WORK_JOURNAL_MAX_COUNT - existingCount - files.length;
+
+  function keyOf(f: File) {
+    return `${f.name}|${f.size}|${f.lastModified}`;
+  }
+
+  function addFiles(incoming: File[]) {
+    if (incoming.length === 0) return;
+    const seen = new Set(files.map(keyOf));
+    const fresh = incoming.filter((f) => !seen.has(keyOf(f)));
+    const skipped = incoming.length - fresh.length;
+
+    const rejected = fresh.map(validateAttachmentFile).find(Boolean);
+    if (rejected) {
+      setError(rejected);
+      return;
+    }
+    const countError = validateAttachmentFiles(fresh, existingCount + files.length);
+    if (countError) {
+      setError(countError);
+      return;
+    }
+    setError(skipped > 0 ? `이미 추가된 파일 ${skipped}개는 건너뛰었습니다.` : null);
+    onChange([...files, ...fresh]);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    if (disabled) return;
+    addFiles(Array.from(e.dataTransfer.files));
+  }
+
+  return (
+    <>
+      <div
+        onDragEnter={(e) => {
+          e.preventDefault();
+          dragDepth.current += 1;
+          if (!disabled) setDragging(true);
+        }}
+        onDragOver={(e) => e.preventDefault()}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          dragDepth.current -= 1;
+          if (dragDepth.current <= 0) setDragging(false);
+        }}
+        onDrop={handleDrop}
+        onClick={() => !disabled && inputRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            if (!disabled) inputRef.current?.click();
+          }
+        }}
+        style={{
+          border: `1px dashed ${dragging ? "var(--color-accent)" : "var(--color-border)"}`,
+          background: dragging ? "var(--color-accent-100)" : "#ffffff",
+          padding: "var(--space-5) var(--space-4)",
+          textAlign: "center",
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.6 : 1,
+          transition: "background 120ms, border-color 120ms",
+        }}
+      >
+        <p style={{ margin: 0, fontSize: 13, color: "var(--color-accent-700)" }}>
+          파일을 이 영역에 끌어다 놓거나, 눌러서 선택하세요
+        </p>
+        <p className="text-muted" style={{ margin: "var(--space-1) 0 0", fontSize: 12 }}>
+          {WORK_JOURNAL_ATTACHMENT_HINT}
+          {remaining > 0 ? ` · ${remaining}개 더 추가 가능` : " · 더 추가할 수 없습니다"}
+        </p>
+        <p className="text-muted" style={{ margin: "var(--space-1) 0 0", fontSize: 12 }}>
+          여러 번 나눠서 고르면 계속 쌓입니다(다른 폴더의 파일도 함께).
+        </p>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept={WORK_JOURNAL_ALLOWED_TYPES.join(",")}
+        style={{ display: "none" }}
+        onChange={(e) => {
+          addFiles(Array.from(e.target.files ?? []));
+          // 같은 파일을 지웠다가 다시 고를 수 있도록 매번 비운다.
+          e.target.value = "";
+        }}
+      />
+      {error && (
+        <p style={{ color: "var(--color-accent-900)", fontSize: 12, margin: "var(--space-1) 0 0" }}>{error}</p>
+      )}
+      {files.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
+          {files.map((f) => (
+            <span key={keyOf(f)} className="tag tag-outline" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {f.name}
+              </span>
+              <span className="text-muted" style={{ fontSize: 11 }}>
+                {formatFileSize(f.size)}
+              </span>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => {
+                  setError(null);
+                  onChange(files.filter((x) => keyOf(x) !== keyOf(f)));
+                }}
+                style={{ background: "none", border: 0, padding: 0, color: "var(--color-accent-900)", cursor: "pointer", font: "inherit" }}
+                aria-label={`${f.name} 선택 해제`}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ─────────────────────────── 작성/수정 폼(인라인 카드) ─────────────────────────── */
 
 function EntryForm({
@@ -84,11 +242,58 @@ function EntryForm({
   const action = entry ? updateWorkJournalEntry.bind(null, entry.id) : createWorkJournalEntry;
   const [state, formAction, pending] = useActionState(action, undefined);
   const wasPendingRef = useRef(false);
+  const [, startSubmit] = useTransition();
+
+  // 첨부파일은 폼 제출 시점에 브라우저가 Storage로 직접 올리고(아래 handleSubmit),
+  // 서버 액션에는 그 위치만 넘긴다 — 이유는 lib/workJournalUpload.ts 주석 참고.
+  const [pickedFiles, setPickedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  // 서버 저장이 실패하면 이미 올라간 파일이 쓸 데 없이 남으므로 지울 수 있게 들고 있는다.
+  const lastUploadedPathsRef = useRef<string[]>([]);
+
+  const busy = pending || uploading;
 
   useEffect(() => {
-    if (wasPendingRef.current && !pending && !state?.error) onDone(true);
+    if (wasPendingRef.current && !pending) {
+      if (state?.error) {
+        // 저장이 막혔다 — 방금 올린 파일은 붙을 곳이 없으니 정리한다.
+        void deleteUploadedWorkJournalFiles(lastUploadedPathsRef.current);
+        lastUploadedPathsRef.current = [];
+      } else {
+        onDone(true);
+      }
+    }
     wasPendingRef.current = pending;
   }, [pending, state, onDone]);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (busy) return;
+    const formData = new FormData(e.currentTarget);
+    setUploadError(null);
+
+    if (pickedFiles.length > 0) {
+      setUploading(true);
+      setProgress({ done: 0, total: pickedFiles.length });
+      const { uploaded, error } = await uploadWorkJournalFiles(pickedFiles, (done, total) =>
+        setProgress({ done, total })
+      );
+      setUploading(false);
+      setProgress(null);
+      if (error) {
+        setUploadError(error);
+        return;
+      }
+      lastUploadedPathsRef.current = uploaded.map((u) => u.path);
+      formData.set("uploadedAttachments", JSON.stringify(uploaded));
+    } else {
+      lastUploadedPathsRef.current = [];
+    }
+
+    startSubmit(() => formAction(formData));
+  }
 
   const initialDate = entry?.entryDate ?? new Date().toISOString().slice(0, 10);
   const hasManualWeek = Boolean(entry?.weekLabel);
@@ -110,7 +315,7 @@ function EntryForm({
   return (
     <div className="card blueprint elev-md" style={{ marginBottom: "var(--space-6)", padding: "var(--space-6) var(--space-8)", background: "#ffffff" }}>
       <div className="card-kicker">{entry ? "일지 수정" : "새 일지 작성"}</div>
-      <form action={formAction} style={{ marginTop: "var(--space-3)" }}>
+      <form onSubmit={handleSubmit} style={{ marginTop: "var(--space-3)" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "var(--space-4)" }}>
           <div className="field">
             <label>작성자 *</label>
@@ -140,16 +345,12 @@ function EntryForm({
         </div>
         <div className="field" style={{ marginTop: "var(--space-3)" }}>
           <label>파일첨부</label>
-          <input
-            className="input"
-            type="file"
-            name="files"
-            multiple
-            accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
+          <FilePicker
+            files={pickedFiles}
+            onChange={setPickedFiles}
+            existingCount={entry?.attachments.length ?? 0}
+            disabled={busy}
           />
-          <p className="text-muted" style={{ fontSize: 12, margin: "var(--space-1) 0 0" }}>
-            이미지·PDF·Office 문서·ZIP, 파일당 12MB 이하, 최대 5개
-          </p>
           {entry && entry.attachments.length > 0 && (
             <div style={{ marginTop: "var(--space-2)" }}>
               <p className="text-muted" style={{ fontSize: 12, margin: "0 0 var(--space-1)" }}>
@@ -159,12 +360,21 @@ function EntryForm({
             </div>
           )}
         </div>
-        {state?.error && <p style={{ color: "var(--color-accent-900)", fontSize: 13, marginTop: "var(--space-2)" }}>{state.error}</p>}
+        {(state?.error || uploadError) && (
+          <p style={{ color: "var(--color-accent-900)", fontSize: 13, marginTop: "var(--space-2)" }}>
+            {uploadError ?? state?.error}
+          </p>
+        )}
+        {progress && (
+          <p className="text-muted" style={{ fontSize: 13, marginTop: "var(--space-2)" }}>
+            첨부파일 업로드 중... ({progress.done}/{progress.total})
+          </p>
+        )}
         <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
-          <button type="submit" className="btn btn-primary blueprint" disabled={pending}>
-            {pending ? "저장 중..." : entry ? "수정 저장" : "일지 추가"}
+          <button type="submit" className="btn btn-primary blueprint" disabled={busy}>
+            {uploading ? "업로드 중..." : pending ? "저장 중..." : entry ? "수정 저장" : "일지 추가"}
           </button>
-          <button type="button" className="btn btn-ghost" onClick={() => onDone(false)}>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => onDone(false)}>
             취소
           </button>
         </div>
