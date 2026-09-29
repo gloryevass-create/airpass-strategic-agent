@@ -101,8 +101,19 @@ export function AttachmentPicker({
           }
         }}
         style={{
-          border: `1px dashed ${dragging ? "var(--color-accent)" : "var(--color-border)"}`,
-          background: dragging ? "var(--color-accent-100)" : "#ffffff",
+          // 평상시에도 "여기에 끌어다 놓으면 된다"가 보이도록 항상 점선으로 둔다
+          // (사용자 요청, 2026-09-29). 드래그 중에는 색을 진하게 + 배경을 깔아
+          // 구분한다.
+          //
+          // ⚠️ 색 변수에 hex 폴백을 함께 적는다 — 처음엔 var(--color-border)를
+          // 썼는데 이 테마엔 그런 변수가 없어서(--color-divider가 맞다) border
+          // 선언 전체가 무효가 됐고, 결과적으로 평상시엔 테두리가 아예 안
+          // 그려지고 드래그할 때만 나타났다. 정의되지 않은 변수는 조용히
+          // 실패하므로 폴백을 적어두면 같은 실수가 화면에 드러나지 않는다.
+          border: `1px dashed ${
+            dragging ? "var(--color-accent, #5980a6)" : "var(--color-accent-400, #94bce3)"
+          }`,
+          background: dragging ? "var(--color-accent-100, #eef6ff)" : "#ffffff",
           padding: compact ? "var(--space-3)" : "var(--space-5) var(--space-4)",
           textAlign: "center",
           cursor: disabled ? "not-allowed" : "pointer",
@@ -110,7 +121,7 @@ export function AttachmentPicker({
           transition: "background 120ms, border-color 120ms",
         }}
       >
-        <p style={{ margin: 0, fontSize: compact ? 12 : 13, color: "var(--color-accent-700)" }}>
+        <p style={{ margin: 0, fontSize: compact ? 12 : 13, color: "var(--color-accent-700, #416180)" }}>
           파일을 이 영역에 끌어다 놓거나, 눌러서 선택하세요
         </p>
         <p className="text-muted" style={{ margin: "var(--space-1) 0 0", fontSize: compact ? 11 : 12 }}>
@@ -136,7 +147,7 @@ export function AttachmentPicker({
         }}
       />
       {error && (
-        <p style={{ color: "var(--color-accent-900)", fontSize: 12, margin: "var(--space-1) 0 0" }}>{error}</p>
+        <p style={{ color: "var(--color-accent-900, #1d2d3d)", fontSize: 12, margin: "var(--space-1) 0 0" }}>{error}</p>
       )}
       {files.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
