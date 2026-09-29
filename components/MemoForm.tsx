@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useTransition } from "react";
 import Link from "next/link";
 import { createMemo, type CreateMemoState } from "@/app/dashboard/memos/actions";
+import { useAttachmentUpload } from "@/lib/attachmentUpload";
+import { AttachmentPicker, AttachmentProgress } from "@/components/AttachmentPicker";
 
 const initialState: CreateMemoState = undefined;
 
@@ -15,9 +17,22 @@ const CATEGORY_OPTIONS = [
 
 export function MemoForm() {
   const [state, formAction, pending] = useActionState(createMemo, initialState);
+  const [, startSubmit] = useTransition();
+  // 첨부파일은 제출 시점에 브라우저가 Storage로 직접 올리고, 서버 액션에는
+  // 그 위치만 넘긴다 — 이유는 lib/attachmentPolicy.ts 맨 위 주석 참고.
+  const upload = useAttachmentUpload("memo");
+  const busy = pending || upload.uploading;
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (busy) return;
+    const formData = new FormData(e.currentTarget);
+    if (!(await upload.attachTo(formData))) return;
+    startSubmit(() => formAction(formData));
+  }
 
   return (
-    <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
       <div className="field">
         <label htmlFor="category">구분</label>
         <select id="category" name="category" required defaultValue="" className="input" style={{ maxWidth: 240 }}>
@@ -43,27 +58,18 @@ export function MemoForm() {
       </div>
 
       <div className="field">
-        <label htmlFor="files">파일첨부</label>
-        <input
-          id="files"
-          name="files"
-          type="file"
-          multiple
-          accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
-          className="input"
-        />
-        <p className="text-muted" style={{ fontSize: 12, margin: "var(--space-1) 0 0" }}>
-          이미지·PDF·Office 문서·ZIP, 한 번에 올리는 파일 합계 4MB 이하, 최대 5개
-        </p>
+        <label>파일첨부</label>
+        <AttachmentPicker service="memo" files={upload.files} onChange={upload.setFiles} disabled={busy} />
       </div>
 
-      {state?.error && (
-        <p style={{ fontSize: 13, color: "var(--color-accent-900)" }}>{state.error}</p>
+      {(state?.error || upload.uploadError) && (
+        <p style={{ fontSize: 13, color: "var(--color-accent-900)" }}>{upload.uploadError ?? state?.error}</p>
       )}
+      <AttachmentProgress progress={upload.progress} />
 
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
-        <button type="submit" disabled={pending} className="btn btn-primary blueprint">
-          {pending ? "저장 중..." : "등록"}
+        <button type="submit" disabled={busy} className="btn btn-primary blueprint">
+          {upload.uploading ? "업로드 중..." : pending ? "저장 중..." : "등록"}
         </button>
         <Link href="/dashboard/memos" className="btn btn-ghost">
           취소

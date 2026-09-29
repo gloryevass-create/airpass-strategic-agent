@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
 import { updateMemo, type UpdateMemoState } from "@/app/dashboard/memos/actions";
 import type { MemoDetail } from "@/lib/queries/memos";
+import { useAttachmentUpload } from "@/lib/attachmentUpload";
+import { AttachmentPicker, AttachmentProgress } from "@/components/AttachmentPicker";
 
 const initialState: UpdateMemoState = undefined;
 
@@ -18,6 +20,18 @@ export function MemoEditForm({ memo }: { memo: MemoDetail }) {
   const action = updateMemo.bind(null, memo.id);
   const [state, formAction, pending] = useActionState(action, initialState);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const [, startSubmit] = useTransition();
+  // 첨부파일은 제출 시점에 브라우저가 Storage로 직접 올린다(lib/attachmentPolicy.ts 참고).
+  const upload = useAttachmentUpload("memo");
+  const busy = pending || upload.uploading;
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (busy) return;
+    const formData = new FormData(e.currentTarget);
+    if (!(await upload.attachTo(formData))) return;
+    startSubmit(() => formAction(formData));
+  }
 
   function toggleRemove(id: string) {
     setRemovedIds((prev) => {
@@ -29,7 +43,7 @@ export function MemoEditForm({ memo }: { memo: MemoDetail }) {
   }
 
   return (
-    <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
       <div className="field">
         <label htmlFor="category">구분</label>
         <select id="category" name="category" required defaultValue={memo.category} className="input" style={{ maxWidth: 240 }}>
@@ -82,27 +96,24 @@ export function MemoEditForm({ memo }: { memo: MemoDetail }) {
       )}
 
       <div className="field">
-        <label htmlFor="files">새 파일첨부</label>
-        <input
-          id="files"
-          name="files"
-          type="file"
-          multiple
-          accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
-          className="input"
+        <label>새 파일첨부</label>
+        <AttachmentPicker
+          service="memo"
+          files={upload.files}
+          onChange={upload.setFiles}
+          existingCount={memo.attachments.length - removedIds.size}
+          disabled={busy}
         />
-        <p className="text-muted" style={{ fontSize: 12, margin: "var(--space-1) 0 0" }}>
-          이미지·PDF·Office 문서·ZIP, 한 번에 올리는 파일 합계 4MB 이하, 최대 5개
-        </p>
       </div>
 
-      {state?.error && (
-        <p style={{ fontSize: 13, color: "var(--color-accent-900)" }}>{state.error}</p>
+      {(state?.error || upload.uploadError) && (
+        <p style={{ fontSize: 13, color: "var(--color-accent-900)" }}>{upload.uploadError ?? state?.error}</p>
       )}
+      <AttachmentProgress progress={upload.progress} />
 
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
-        <button type="submit" disabled={pending} className="btn btn-primary blueprint">
-          {pending ? "저장 중..." : "저장"}
+        <button type="submit" disabled={busy} className="btn btn-primary blueprint">
+          {upload.uploading ? "업로드 중..." : pending ? "저장 중..." : "저장"}
         </button>
         <Link href={`/dashboard/memos/${memo.id}`} className="btn btn-ghost">
           취소

@@ -1,13 +1,15 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database.types";
-import { safeStorageFileName } from "@/lib/storageKey";
+import { after } from "next/server";
+import { driveFileViewUrl } from "@/lib/googleDriveAttachments";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  driveFileViewUrl,
-  isGoogleDriveAttachmentsConfigured,
-  uploadAttachmentToDrive,
-  type AttachmentService,
-} from "@/lib/googleDriveAttachments";
+  ATTACHMENT_POLICY,
+  asFileLike,
+  validateAttachmentFiles,
+  type UploadedAttachment,
+} from "@/lib/attachmentPolicy";
 
 // SI Business/Cooperation/Marketing 보드의 "히스토리" 항목에 파일을 첨부하는
 // 기능(2026-09-06)이 세 보드 모두 완전히 같은 구조(테이블명만 다름)라 공용
@@ -17,54 +19,15 @@ import {
 // 감싸는 방식)와 동일한 원칙 — 구글드라이브가 설정돼 있으면 그쪽에, 아니면
 // Supabase Storage "history-attachments" 버킷(세 보드가 공유, 경로를
 // 서비스명/history_id로 구분)에 올린다.
-const HISTORY_ATTACHMENT_ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/zip",
-  "application/x-zip-compressed",
-];
-// ⚠️ 상한이 12MB → 4MB로 내려간 게 아니라, **12MB는 처음부터 동작한 적이 없다**
-// (2026-09-29 확인). 이 화면들은 파일 바이트를 Server Action으로 보내는데 그
-// 본문 상한이 기본 1MB였고(next.config.ts에 설정이 없었다), 그걸 4MB로 올린 게
-// 지금 상태다. 더는 못 올린다 — Vercel Functions의 요청 본문 4.5MB는 요금제와
-// 무관한 플랫폼 하드 리밋이다.
-//
-// 그리고 그 4MB는 **파일 하나가 아니라 요청 전체**(고른 파일 전부 + 폼 필드)에
-// 걸린다. 그래서 화면 문구도 "파일당"이 아니라 "합계"라고 적는다.
-//
-// 이보다 큰 첨부가 필요하면 Work Journal처럼 브라우저 → Supabase Storage 직접
-// 업로드로 바꿔야 한다(lib/workJournalUpload.ts) — 그 경로는 Vercel을 아예
-// 거치지 않아 상한이 사라진다.
-export const HISTORY_ATTACHMENT_MAX_SIZE = 4 * 1024 * 1024;
-export const HISTORY_ATTACHMENT_MAX_COUNT = 5;
-const HISTORY_ATTACHMENTS_BUCKET = "history-attachments";
+export const HISTORY_ATTACHMENT_MAX_COUNT = ATTACHMENT_POLICY.history.maxCount;
+const HISTORY_ATTACHMENTS_BUCKET = ATTACHMENT_POLICY.history.bucket;
 
 /** 보드 쿼리 파일(lib/queries/businessProjectsV2.ts 등)이 히스토리 항목에 붙여
  * 반환하는 첨부파일 표시용 타입 — 세 보드 모두 이 모양 그대로 쓴다. */
 export type HistoryAttachment = { id: string; fileName: string; url: string | null };
 
-export function validateHistoryAttachmentFiles(files: File[]): string | null {
-  if (files.length > HISTORY_ATTACHMENT_MAX_COUNT) {
-    return `첨부파일은 한 번에 최대 ${HISTORY_ATTACHMENT_MAX_COUNT}개까지 올릴 수 있습니다.`;
-  }
-  for (const file of files) {
-    if (!HISTORY_ATTACHMENT_ALLOWED_TYPES.includes(file.type)) {
-      return `${file.name}: 이미지·PDF·Office 문서·ZIP 파일만 올릴 수 있습니다.`;
-    }
-    if (file.size > HISTORY_ATTACHMENT_MAX_SIZE) {
-      return `${file.name}: 첨부파일은 한 번에 합계 4MB까지만 올릴 수 있습니다.`;
-    }
-  }
-  return null;
+export function validateHistoryAttachmentFiles(uploaded: UploadedAttachment[]): string | null {
+  return validateAttachmentFiles("history", asFileLike(uploaded));
 }
 
 export type HistoryAttachmentInsert = {
@@ -74,44 +37,32 @@ export type HistoryAttachmentInsert = {
   drive_file_id: string | null;
 };
 
-/** 파일들을 업로드하고 insert()에 바로 넘길 수 있는 레코드 배열로 돌려준다.
- * 개별 파일 업로드 실패는 조용히 건너뛴다(히스토리 등록 자체를 막으면 안 됨). */
-export async function resolveHistoryAttachments(
-  supabase: SupabaseClient<Database>,
-  service: AttachmentService,
-  historyId: string,
-  files: File[]
-): Promise<HistoryAttachmentInsert[]> {
-  const useDrive = await isGoogleDriveAttachmentsConfigured();
+/** 브라우저가 이미 Storage에 올려둔 파일들을 insert()에 바로 넘길 수 있는
+ * 레코드 배열로 바꾼다. 2026-09-29부터 파일 바이트는 서버를 거치지 않는다 —
+ * 이유와 보안상 함의는 lib/attachmentPolicy.ts 맨 위 주석 참고.
+ *
+ * historyId를 더는 쓰지 않는다(경로는 브라우저가 업로드 시점에 정한다) —
+ * 히스토리 행이 만들어지기 전에 파일이 먼저 올라가기 때문. 삭제는 항상 DB에
+ * 저장된 전체 경로로 하므로 폴더명이 무엇이든 상관없다. */
+export function buildHistoryAttachmentRows(uploaded: UploadedAttachment[]): HistoryAttachmentInsert[] {
+  return uploaded.map((u) => ({
+    file_name: u.fileName,
+    content_type: u.contentType,
+    storage_path: u.path,
+    drive_file_id: null,
+  }));
+}
 
-  // 파일마다 순서대로 업로드하면 첨부 5개(상한)를 붙인 사람은 업로드 시간이
-  // 그대로 5배로 쌓인다 — 서로 독립적인 업로드라 나란히 올린다(2026-09-17).
-  // 실패한 파일만 조용히 빠지고 나머지는 원래 순서를 유지한다.
-  const results = await Promise.all(
-    files.map(async (file): Promise<HistoryAttachmentInsert | null> => {
-      if (useDrive) {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const fileId = await uploadAttachmentToDrive(service, file.name, bytes, file.type).catch((e) => {
-          console.error(`[resolveHistoryAttachments] 업로드 실패 (${file.name}):`, e instanceof Error ? e.message : e);
-          return null;
-        });
-        if (!fileId) return null;
-        return { file_name: file.name, content_type: file.type, storage_path: null, drive_file_id: fileId };
-      }
-
-      const path = `${service}/${historyId}/${safeStorageFileName(file.name)}`;
-      const { error } = await supabase.storage
-        .from(HISTORY_ATTACHMENTS_BUCKET)
-        .upload(path, file, { contentType: file.type });
-      if (error) {
-        console.error(`[resolveHistoryAttachments] 업로드 실패 (${file.name}):`, error.message);
-        return null;
-      }
-      return { file_name: file.name, content_type: file.type, storage_path: path, drive_file_id: null };
-    })
-  );
-
-  return results.filter((r): r is HistoryAttachmentInsert => r !== null);
+/** 히스토리 저장이 막혀 쓸 데가 없어진 업로드 파일을 응답 이후에 지운다. */
+export function discardUploadedHistoryFiles(uploaded: UploadedAttachment[]): void {
+  if (uploaded.length === 0) return;
+  after(async () => {
+    try {
+      await createAdminClient().storage.from(HISTORY_ATTACHMENTS_BUCKET).remove(uploaded.map((u) => u.path));
+    } catch (e) {
+      console.error("[historyAttachments] 미사용 첨부파일 정리 실패:", e instanceof Error ? e.message : e);
+    }
+  });
 }
 
 /** 조회 시점에 표시용 URL을 만든다 — 구글드라이브는 API 호출 없이 고정 링크로

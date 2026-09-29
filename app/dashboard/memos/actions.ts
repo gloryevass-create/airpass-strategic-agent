@@ -7,8 +7,14 @@ import { requireAuthedClient } from "@/lib/supabase/authed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { MemoCategory } from "@/lib/queries/memos";
 import { notifyTeamAfterResponse } from "@/lib/notifyTeam";
-import { deleteAttachmentFromDrive, isGoogleDriveAttachmentsConfigured, uploadAttachmentToDrive } from "@/lib/googleDriveAttachments";
-import { safeStorageFileName } from "@/lib/storageKey";
+import { deleteAttachmentFromDrive } from "@/lib/googleDriveAttachments";
+import {
+  ATTACHMENT_POLICY,
+  asFileLike,
+  parseUploadedAttachments,
+  validateAttachmentFiles,
+  type UploadedAttachment,
+} from "@/lib/attachmentPolicy";
 
 const CATEGORIES: MemoCategory[] = ["business", "cooperation", "marketing", "etc"];
 
@@ -17,54 +23,7 @@ const CATEGORIES: MemoCategory[] = ["business", "cooperation", "marketing", "etc
 // 문서/ZIP까지 넓게 잡는다. 이전에는 크기·형식 제한이 전혀 없었고 업로드 실패가
 // 조용히 무시돼(`continue`) 사용자가 원인을 알 수 없었다 — 이제 저장 전에 미리
 // 걸러 에러를 보여준다(사용자 확인, 2026-08-23).
-const MEMO_ATTACHMENT_ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/zip",
-  "application/x-zip-compressed",
-];
-// ⚠️ 상한이 12MB → 4MB로 내려간 게 아니라, **12MB는 처음부터 동작한 적이 없다**
-// (2026-09-29 확인). 이 화면들은 파일 바이트를 Server Action으로 보내는데 그
-// 본문 상한이 기본 1MB였고(next.config.ts에 설정이 없었다), 그걸 4MB로 올린 게
-// 지금 상태다. 더는 못 올린다 — Vercel Functions의 요청 본문 4.5MB는 요금제와
-// 무관한 플랫폼 하드 리밋이다.
-//
-// 그리고 그 4MB는 **파일 하나가 아니라 요청 전체**(고른 파일 전부 + 폼 필드)에
-// 걸린다. 그래서 화면 문구도 "파일당"이 아니라 "합계"라고 적는다.
-//
-// 이보다 큰 첨부가 필요하면 Work Journal처럼 브라우저 → Supabase Storage 직접
-// 업로드로 바꿔야 한다(lib/workJournalUpload.ts) — 그 경로는 Vercel을 아예
-// 거치지 않아 상한이 사라진다.
-const MEMO_ATTACHMENT_MAX_SIZE = 4 * 1024 * 1024;
-const MEMO_ATTACHMENT_MAX_COUNT = 5;
-
-/** 업로드 시도 전에 미리 검증해서, 저장 실패가 조용히 무시되지 않고 사용자에게
- * 명확한 이유와 함께 보이게 한다. 하나라도 걸리면 전체 저장을 막는다(부분 저장 방지). */
-function validateMemoFiles(files: File[]): string | null {
-  if (files.length > MEMO_ATTACHMENT_MAX_COUNT) {
-    return `첨부파일은 한 번에 최대 ${MEMO_ATTACHMENT_MAX_COUNT}개까지 올릴 수 있습니다.`;
-  }
-  for (const file of files) {
-    if (!MEMO_ATTACHMENT_ALLOWED_TYPES.includes(file.type)) {
-      return `${file.name}: 이미지·PDF·Office 문서·ZIP 파일만 올릴 수 있습니다.`;
-    }
-    if (file.size > MEMO_ATTACHMENT_MAX_SIZE) {
-      return `${file.name}: 첨부파일은 한 번에 합계 4MB까지만 올릴 수 있습니다.`;
-    }
-  }
-  return null;
-}
-
-const MEMO_BUCKET = "memo-attachments";
+const MEMO_BUCKET = ATTACHMENT_POLICY.memo.bucket;
 
 type MemoAttachmentRow = {
   memo_id: string;
@@ -74,44 +33,43 @@ type MemoAttachmentRow = {
   drive_file_id: string | null;
 };
 
-/** 첨부파일들을 올리고 insert할 행 배열을 돌려준다(작성·수정 공용, 2026-09-17).
- * 예전엔 작성/수정 액션이 각자 똑같은 for 루프로 "한 파일 올리고 → 그 행 insert →
- * 다음 파일"을 반복해서, 첨부 5개(상한)면 왕복 10회가 순서대로 쌓였다 — 업로드는
- * 나란히 하고 행은 한 번에 insert한다. 개별 실패는 예전처럼 건너뛰되 failed로
- * 알려서 호출부가 ?attachmentError=1을 붙일 수 있게 한다. */
-async function uploadMemoAttachments(
+/** 브라우저가 이미 Storage에 올려둔 파일들의 행을 만든다(작성·수정 공용).
+ * 2026-09-29부터 파일 바이트는 서버를 거치지 않는다 — 이유와 보안상 함의는
+ * lib/attachmentPolicy.ts 맨 위 주석 참고. */
+async function insertMemoAttachments(
   supabase: Awaited<ReturnType<typeof requireAuthedClient>>["supabase"],
   memoId: string,
-  files: File[],
+  uploaded: UploadedAttachment[],
   label: string
 ): Promise<{ failed: boolean }> {
-  if (files.length === 0) return { failed: false };
+  if (uploaded.length === 0) return { failed: false };
+  const rows: MemoAttachmentRow[] = uploaded.map((u) => ({
+    memo_id: memoId,
+    file_name: u.fileName,
+    file_size: u.size,
+    storage_path: u.path,
+    drive_file_id: null,
+  }));
+  const { error } = await supabase.from("ad_strategy_memo_attachments").insert(rows);
+  if (error) {
+    console.error(`[${label}] 첨부파일 연결 실패:`, error.message);
+    // 붙을 곳이 없어진 파일은 지운다(고아 파일 방지).
+    discardUploadedMemoFiles(uploaded);
+    return { failed: true };
+  }
+  return { failed: false };
+}
 
-  const useDrive = await isGoogleDriveAttachmentsConfigured();
-  const results = await Promise.all(
-    files.map(async (file): Promise<MemoAttachmentRow | null> => {
-      if (useDrive) {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const fileId = await uploadAttachmentToDrive("memo", file.name, bytes, file.type).catch((e) => {
-          console.error(`[${label}] 첨부파일 업로드 실패 (${file.name}):`, e instanceof Error ? e.message : e);
-          return null;
-        });
-        if (!fileId) return null;
-        return { memo_id: memoId, file_name: file.name, file_size: file.size, storage_path: null, drive_file_id: fileId };
-      }
-      const path = `${memoId}/${safeStorageFileName(file.name)}`;
-      const { error } = await supabase.storage.from(MEMO_BUCKET).upload(path, file, { contentType: file.type });
-      if (error) {
-        console.error(`[${label}] 첨부파일 업로드 실패 (${file.name}):`, error.message);
-        return null;
-      }
-      return { memo_id: memoId, file_name: file.name, file_size: file.size, storage_path: path, drive_file_id: null };
-    })
-  );
-
-  const rows = results.filter((r): r is MemoAttachmentRow => r !== null);
-  if (rows.length > 0) await supabase.from("ad_strategy_memo_attachments").insert(rows);
-  return { failed: rows.length !== files.length };
+/** 저장이 막혀 쓸 데가 없어진 업로드 파일을 응답 이후에 지운다. */
+function discardUploadedMemoFiles(uploaded: UploadedAttachment[]): void {
+  if (uploaded.length === 0) return;
+  after(async () => {
+    try {
+      await createAdminClient().storage.from(MEMO_BUCKET).remove(uploaded.map((u) => u.path));
+    } catch (e) {
+      console.error("[memos] 미사용 첨부파일 정리 실패:", e instanceof Error ? e.message : e);
+    }
+  });
 }
 
 /** 첨부파일 실물(Storage/구글드라이브)을 응답 이후에 지운다 — DB 행이 사라진
@@ -145,16 +103,21 @@ export async function createMemo(_prevState: CreateMemoState, formData: FormData
   const category = String(formData.get("category") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
-  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  const uploaded = parseUploadedAttachments(formData);
+  /** 저장을 중단할 때 이미 올라간 첨부를 함께 정리한다(고아 파일 방지). */
+  const fail = (error: string) => {
+    discardUploadedMemoFiles(uploaded);
+    return { error };
+  };
 
   if (!CATEGORIES.includes(category as MemoCategory)) {
-    return { error: "구분을 선택하세요." };
+    return fail("구분을 선택하세요.");
   }
-  if (!title) return { error: "제목을 입력하세요." };
-  if (!content) return { error: "내용을 입력하세요." };
+  if (!title) return fail("제목을 입력하세요.");
+  if (!content) return fail("내용을 입력하세요.");
 
-  const fileError = validateMemoFiles(files);
-  if (fileError) return { error: fileError };
+  const fileError = validateAttachmentFiles("memo", asFileLike(uploaded));
+  if (fileError) return fail(fileError);
 
   const { data: memo, error } = await supabase
     .from("ad_strategy_memos")
@@ -169,10 +132,10 @@ export async function createMemo(_prevState: CreateMemoState, formData: FormData
     .single();
 
   if (error || !memo) {
-    return { error: `저장 실패: ${error?.message ?? "알 수 없는 오류"}` };
+    return fail(`저장 실패: ${error?.message ?? "알 수 없는 오류"}`);
   }
 
-  const { failed: attachmentFailed } = await uploadMemoAttachments(supabase, memo.id, files, "createMemo");
+  const { failed: attachmentFailed } = await insertMemoAttachments(supabase, memo.id, uploaded, "createMemo");
 
   notifyTeamAfterResponse(user, (actor) => ({
     type: "memo",
@@ -216,24 +179,37 @@ export async function updateMemo(
   const category = String(formData.get("category") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
-  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  const uploaded = parseUploadedAttachments(formData);
+  /** 저장을 중단할 때 이미 올라간 첨부를 함께 정리한다(고아 파일 방지). */
+  const fail = (error: string) => {
+    discardUploadedMemoFiles(uploaded);
+    return { error };
+  };
   const removeAttachmentIds = formData.getAll("removeAttachments").map(String);
 
   if (!CATEGORIES.includes(category as MemoCategory)) {
-    return { error: "구분을 선택하세요." };
+    return fail("구분을 선택하세요.");
   }
-  if (!title) return { error: "제목을 입력하세요." };
-  if (!content) return { error: "내용을 입력하세요." };
+  if (!title) return fail("제목을 입력하세요.");
+  if (!content) return fail("내용을 입력하세요.");
 
-  const fileError = validateMemoFiles(files);
-  if (fileError) return { error: fileError };
+  // 개수 상한은 "남길 기존 첨부 + 이번에 추가하는 것"으로 센다.
+  const { count: keptCount } = uploaded.length
+    ? await supabase
+        .from("ad_strategy_memo_attachments")
+        .select("id", { count: "exact", head: true })
+        .eq("memo_id", memoId)
+        .not("id", "in", `(${removeAttachmentIds.length ? removeAttachmentIds.join(",") : "00000000-0000-0000-0000-000000000000"})`)
+    : { count: 0 };
+  const fileError = validateAttachmentFiles("memo", asFileLike(uploaded), keptCount ?? 0);
+  if (fileError) return fail(fileError);
 
   const { error } = await supabase
     .from("ad_strategy_memos")
     .update({ category: category as MemoCategory, title, content })
     .eq("id", memoId);
 
-  if (error) return { error: `수정 실패: ${error.message}` };
+  if (error) return fail(`수정 실패: ${error.message}`);
 
   // 지울 행을 삭제하면서 그 행의 파일 정보를 응답으로 함께 받아온다(조회 →
   // 파일 삭제 → 행 삭제로 줄줄이 기다리던 것을 한 번의 왕복으로, 2026-09-17).
@@ -246,7 +222,7 @@ export async function updateMemo(
     if (removed?.length) cleanUpMemoFilesAfterResponse(removed);
   }
 
-  const { failed: attachmentFailed } = await uploadMemoAttachments(supabase, memoId, files, "updateMemo");
+  const { failed: attachmentFailed } = await insertMemoAttachments(supabase, memoId, uploaded, "updateMemo");
 
   revalidatePath(`/dashboard/memos/${memoId}`);
   revalidatePath("/dashboard/memos");

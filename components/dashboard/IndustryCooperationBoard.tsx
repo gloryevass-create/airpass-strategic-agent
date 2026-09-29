@@ -15,6 +15,8 @@ import {
   createCooperationProjectHistoryEntry,
   updateCooperationProjectHistoryEntry,
 } from "@/app/dashboard/actions/cooperationProjects";
+import { useAttachmentUpload } from "@/lib/attachmentUpload";
+import { AttachmentPicker, AttachmentProgress } from "@/components/AttachmentPicker";
 
 // Business(/dashboard/business)를 Claude Design "Industry" 테마로 다시 그린 것과
 // 같은 틀을 재사용한다 — 데이터·서버 액션은 기존 Cooperation 그대로, 화면만
@@ -464,6 +466,24 @@ function HistoryRow({ entry }: { entry: CooperationProjectHistoryEntry }) {
 function HistorySection({ project }: { project: CooperationProject }) {
   const action = createCooperationProjectHistoryEntry.bind(null, project.id);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [, startSubmit] = useTransition();
+  // 첨부파일은 제출 시점에 브라우저가 Storage로 직접 올리고, 서버 액션에는 그
+  // 위치만 넘긴다 — 이유는 lib/attachmentPolicy.ts 맨 위 주석 참고.
+  const upload = useAttachmentUpload("history");
+  const busy = pending || upload.uploading;
+
+  async function handleHistorySubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (busy) return;
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    if (!(await upload.attachTo(formData))) return;
+    startSubmit(() => {
+      formAction(formData);
+      form.reset();
+      upload.reset();
+    });
+  }
 
   return (
     <div style={{ borderTop: "1px solid var(--color-divider)", paddingTop: "var(--space-5)", marginBottom: "var(--space-6)" }}>
@@ -480,21 +500,15 @@ function HistorySection({ project }: { project: CooperationProject }) {
           ))}
         </div>
       )}
-      <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <form onSubmit={handleHistorySubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <textarea className="input" name="content" required rows={3} placeholder="예: 담당자와 통화, 견적 재요청" />
-        <input
-          className="input"
-          type="file"
-          name="files"
-          multiple
-          accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
-        />
-        <p className="text-muted" style={{ fontSize: 11, margin: 0 }}>
-          이미지·PDF·Office 문서·ZIP, 한 번에 올리는 파일 합계 4MB 이하, 최대 5개
-        </p>
-        {state?.error && <p style={{ color: "var(--color-accent-900)", fontSize: 13 }}>{state.error}</p>}
-        <button type="submit" className="btn btn-primary" style={{ alignSelf: "flex-start" }} disabled={pending}>
-          {pending ? "등록 중..." : "히스토리 등록"}
+        <AttachmentPicker service="history" files={upload.files} onChange={upload.setFiles} disabled={busy} compact />
+        {(state?.error || upload.uploadError) && (
+          <p style={{ color: "var(--color-accent-900)", fontSize: 13 }}>{upload.uploadError ?? state?.error}</p>
+        )}
+        <AttachmentProgress progress={upload.progress} />
+        <button type="submit" className="btn btn-primary" style={{ alignSelf: "flex-start" }} disabled={busy}>
+          {upload.uploading ? "업로드 중..." : pending ? "등록 중..." : "히스토리 등록"}
         </button>
       </form>
     </div>

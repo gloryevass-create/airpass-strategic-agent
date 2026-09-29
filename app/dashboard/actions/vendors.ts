@@ -6,11 +6,16 @@ import { requireAuthedClient } from "@/lib/supabase/authed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractVendorInfoFromDocument } from "@/lib/vendorDocumentAi";
 import type { VendorDocumentType } from "@/lib/queries/vendors";
-import { deleteAttachmentFromDrive, isGoogleDriveAttachmentsConfigured, uploadAttachmentToDrive } from "@/lib/googleDriveAttachments";
-import { safeStorageFileName } from "@/lib/storageKey";
+import { deleteAttachmentFromDrive } from "@/lib/googleDriveAttachments";
+import {
+  ATTACHMENT_POLICY,
+  asFileLike,
+  parseUploadedAttachments,
+  validateAttachmentFiles,
+} from "@/lib/attachmentPolicy";
 
 const PATH = "/dashboard/vendors";
-const DOCUMENTS_BUCKET = "vendor-documents";
+const DOCUMENTS_BUCKET = ATTACHMENT_POLICY.vendor.bucket;
 
 /** 서류 실물(Storage/구글드라이브)을 응답 이후에 지운다(2026-09-17) — DB 행이
  * 사라진 뒤 하는 뒷정리라 삭제 버튼을 누른 사람이 기다릴 필요가 없다(Memo
@@ -102,91 +107,73 @@ export type UploadVendorDocumentResult =
 export async function uploadVendorDocument(formData: FormData): Promise<UploadVendorDocumentResult> {
   const { supabase } = await requireAuthedClient();
 
-  const file = formData.get("file");
+  // 파일 바이트는 브라우저가 이미 Storage에 올려뒀고 여기엔 위치만 온다
+  // (lib/attachmentPolicy.ts 맨 위 주석 참고 — Vercel 4.5MB 상한 우회).
+  const uploaded = parseUploadedAttachments(formData)[0];
   const documentType = String(formData.get("documentType") ?? "") as VendorDocumentType;
   let vendorId = String(formData.get("vendorId") ?? "") || null;
 
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: "파일을 선택하세요." };
-  }
-  if (!["business_registration", "bankbook", "business_card", "product_material"].includes(documentType)) {
-    return { ok: false, error: "잘못된 문서 종류입니다." };
-  }
-  const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-  if (!allowed.includes(file.type)) {
-    return { ok: false, error: "JPG, PNG, WebP, PDF 파일만 올릴 수 있습니다." };
-  }
-  // 상한 4MB의 근거는 lib/historyAttachments.ts 주석 참고(Server Action 본문
-  // 1MB 기본값 → 4MB로 상향, Vercel 4.5MB가 그 위의 하드 리밋).
-  if (file.size > 4 * 1024 * 1024) {
-    return { ok: false, error: "파일은 4MB 이하만 올릴 수 있습니다." };
-  }
+  /** 중단할 때 이미 올라간 파일을 함께 정리한다(고아 파일 방지). */
+  const fail = (error: string): UploadVendorDocumentResult => {
+    if (uploaded) {
+      after(async () => {
+        try {
+          await createAdminClient().storage.from(DOCUMENTS_BUCKET).remove([uploaded.path]);
+        } catch (e) {
+          console.error("[uploadVendorDocument] 미사용 파일 정리 실패:", e instanceof Error ? e.message : e);
+        }
+      });
+    }
+    return { ok: false, error };
+  };
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!uploaded) return { ok: false, error: "파일을 선택하세요." };
+  if (!["business_registration", "bankbook", "business_card", "product_material"].includes(documentType)) {
+    return fail("잘못된 문서 종류입니다.");
+  }
+  const fileError = validateAttachmentFiles("vendor", asFileLike([uploaded]));
+  if (fileError) return fail(fileError);
 
   // 제품자료는 업체 정보 추출 대상이 아니라 AI 호출 자체를 건너뛴다(카탈로그
-  // 이미지에서 사업자번호 같은 값을 억지로 읽어내려 하지 않도록).
-  // AI 추출(가장 느린 구간)과 "구글드라이브가 설정돼 있는지"(DB 조회)는 서로
-  // 무관하니 나란히 진행한다 — 예전엔 AI가 끝난 뒤에야 이 조회를 시작했다(2026-09-17).
-  const useDrivePromise = isGoogleDriveAttachmentsConfigured();
-  useDrivePromise.catch(() => {});
-
+  // 이미지에서 사업자번호 같은 값을 억지로 읽어내려 하지 않도록) — 그래서
+  // 파일을 내려받을 필요도 없다. 추출이 필요한 종류일 때만 Storage에서
+  // 바이트를 받아온다(예전엔 폼이 바이트를 실어 보냈다).
   let extracted: Record<string, string> = {};
   if (documentType !== "product_material") {
     try {
-      extracted = await extractVendorInfoFromDocument(bytes, file.type, documentType);
+      const { data: blob, error: downloadError } = await supabase.storage
+        .from(DOCUMENTS_BUCKET)
+        .download(uploaded.path);
+      if (downloadError || !blob) throw new Error(downloadError?.message ?? "파일을 읽지 못했습니다.");
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      extracted = await extractVendorInfoFromDocument(bytes, uploaded.contentType, documentType);
     } catch (e) {
-      // AI 추출 실패해도 파일 업로드/등록 자체는 계속 진행한다.
+      // AI 추출 실패해도 파일 등록 자체는 계속 진행한다(기존 동작 유지).
       extracted = {};
       console.error("[uploadVendorDocument] AI 추출 실패:", e instanceof Error ? e.message : e);
     }
   }
 
   if (!vendorId) {
-    const fallbackName = file.name.replace(/\.[^.]+$/, "").trim().slice(0, 120) || "새 제조사";
+    const fallbackName = uploaded.fileName.replace(/\.[^.]+$/, "").trim().slice(0, 120) || "새 제조사";
     const { data: created, error: createError } = await supabase
       .from("partner_vendors")
       .insert({ company_name: extracted.companyName || fallbackName })
       .select("id")
       .single();
     if (createError || !created) {
-      return { ok: false, error: `제조사 등록 실패: ${createError?.message ?? "알 수 없는 오류"}` };
+      return fail(`제조사 등록 실패: ${createError?.message ?? "알 수 없는 오류"}`);
     }
     vendorId = created.id;
   }
 
-  if (await useDrivePromise) {
-    const fileId = await uploadAttachmentToDrive("vendor", file.name, bytes, file.type).catch((e) => {
-      console.error("[uploadVendorDocument] 업로드 실패:", e instanceof Error ? e.message : e);
-      return null;
-    });
-    if (!fileId) {
-      return { ok: false, error: "업로드 실패: 구글드라이브에 파일을 올리지 못했습니다." };
-    }
-    await supabase.from("vendor_documents").insert({
-      vendor_id: vendorId,
-      document_type: documentType,
-      original_name: file.name,
-      drive_file_id: fileId,
-    });
-    revalidatePath(PATH);
-    return { ok: true, vendorId, extracted };
-  }
-
-  const path = `${vendorId}/${safeStorageFileName(file.name)}`;
-  const { error: uploadError } = await supabase.storage.from(DOCUMENTS_BUCKET).upload(path, bytes, {
-    contentType: file.type,
-  });
-  if (uploadError) {
-    return { ok: false, error: `업로드 실패: ${uploadError.message}` };
-  }
-
-  await supabase.from("vendor_documents").insert({
+  const { error: insertError } = await supabase.from("vendor_documents").insert({
     vendor_id: vendorId,
     document_type: documentType,
-    original_name: file.name,
-    storage_path: path,
+    original_name: uploaded.fileName,
+    storage_path: uploaded.path,
   });
+  if (insertError) return fail(`업로드 실패: ${insertError.message}`);
 
   revalidatePath(PATH);
   return { ok: true, vendorId, extracted };

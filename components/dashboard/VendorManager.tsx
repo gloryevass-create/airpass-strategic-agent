@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import type { Vendor, VendorDocumentType } from "@/lib/queries/vendors";
 import { saveVendor, deleteVendor, uploadVendorDocument, deleteVendorDocument } from "@/app/dashboard/actions/vendors";
 import { SearchInput } from "@/components/dashboard/SearchInput";
+import { uploadAttachments, deleteUploadedAttachments } from "@/lib/attachmentUpload";
+import { attachmentHint, validateAttachmentFile } from "@/lib/attachmentPolicy";
 
 const DOCUMENT_LABELS: Record<VendorDocumentType, string> = {
   business_registration: "사업자등록증",
@@ -164,26 +166,47 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
     });
   }
 
+  /** 파일을 브라우저에서 Storage로 직접 올린 뒤, 서버 액션에는 그 위치만 넘긴다
+   * (lib/attachmentPolicy.ts 맨 위 주석 참고 — Vercel 4.5MB 상한 우회).
+   * AI 추출이 필요한 종류면 서버가 그 파일을 Storage에서 다시 내려받아 읽는다. */
   async function handleUpload(type: VendorDocumentType, files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
     const input = fileInputRefs.current[type];
     if (input) input.value = "";
 
+    const invalid = validateAttachmentFile("vendor", file);
+    if (invalid) {
+      setMessage("");
+      setError(invalid);
+      return;
+    }
+
     setUploading(type);
     setError(null);
-    setMessage(`${DOCUMENT_LABELS[type]}을 올리고 정보를 읽는 중입니다.`);
+    setMessage(`${DOCUMENT_LABELS[type]}을 올리는 중입니다.`);
+    let uploadedPath: string | null = null;
     try {
+      const { uploaded, error: uploadError } = await uploadAttachments("vendor", [file]);
+      if (uploadError || !uploaded[0]) {
+        setMessage("");
+        setError(uploadError ?? "업로드에 실패했습니다.");
+        return;
+      }
+      uploadedPath = uploaded[0].path;
+
+      setMessage(`${DOCUMENT_LABELS[type]}에서 정보를 읽는 중입니다.`);
       const formData = new FormData();
       if (selected) formData.set("vendorId", selected.id);
       formData.set("documentType", type);
-      formData.set("file", file);
+      formData.set("uploadedAttachments", JSON.stringify(uploaded));
       const result = await uploadVendorDocument(formData);
       if (!result.ok) {
         setMessage("");
         setError(result.error);
         return;
       }
+      uploadedPath = null; // 서버가 받아 갔으므로 정리 대상 아님
       setSelectedId(result.vendorId);
       setIsNew(false);
       // 추출된 값이 있는 필드만 폼에 반영한다(비어있는 필드는 기존 입력을 유지).
@@ -197,6 +220,8 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
       setMessage("문서에서 읽은 정보를 반영했습니다. 확인·수정 후 저장해 주세요.");
       router.refresh();
     } finally {
+      // 등록까지 가지 못했으면 올려둔 파일을 지운다(고아 파일 방지).
+      if (uploadedPath) void deleteUploadedAttachments("vendor", [uploadedPath]);
       setUploading(null);
     }
   }
@@ -309,7 +334,7 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
             <strong style={{ fontSize: 14 }}>업체 문서</strong>
             <span className="text-muted" style={{ fontSize: 11 }}>
-              JPG·PNG·WebP·PDF, 4MB 이하
+              {attachmentHint("vendor")}
             </span>
           </div>
           <div className="vendor-doc-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "var(--space-3)" }}>
@@ -356,6 +381,11 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
                       fontWeight: 500,
                     }}
                     className="text-muted"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (uploading === null) void handleUpload(type, e.dataTransfer.files);
+                    }}
                   >
                     <input
                       ref={(el) => {
@@ -367,7 +397,7 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
                       onChange={(e) => void handleUpload(type, e.target.files)}
                       hidden
                     />
-                    {uploading === type ? "정보 읽는 중..." : docs.length ? "파일 추가·교체" : "파일 선택"}
+                    {uploading === type ? "올리는 중..." : docs.length ? "파일 추가·교체(끌어다 놓기 가능)" : "파일 선택(끌어다 놓기 가능)"}
                   </label>
                 </div>
               );

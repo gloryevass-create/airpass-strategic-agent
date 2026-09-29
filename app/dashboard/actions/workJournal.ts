@@ -7,44 +7,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyTeamAfterResponseAs } from "@/lib/notifyTeam";
 import { deleteAttachmentFromDrive, driveFileViewUrl } from "@/lib/googleDriveAttachments";
 import {
-  WORK_JOURNAL_BUCKET,
+  ATTACHMENT_POLICY,
+  asFileLike,
+  parseUploadedAttachments,
   validateAttachmentFiles,
   type UploadedAttachment,
-} from "@/lib/workJournalAttachments";
+} from "@/lib/attachmentPolicy";
 
 const PATH = "/dashboard/work-journal";
-const BUCKET = WORK_JOURNAL_BUCKET;
+const BUCKET = ATTACHMENT_POLICY.journal.bucket;
 
-/** 첨부파일은 2026-09-29부터 **브라우저가 Supabase Storage로 직접 올리고**, 이
- * 액션은 "어디에 올렸는지"만 받아 DB 행을 만든다 — 이유는
- * lib/workJournalUpload.ts의 주석 참고(Server Action 1MB / Vercel 4.5MB 상한을
- * 우회해 20MB 첨부를 가능하게 하려면 이 방법뿐이다).
- *
- * 그래서 여기서 검사하는 크기·형식은 브라우저가 알려준 값이다. 진짜로 거부하는
- * 쪽은 Storage 버킷의 file_size_limit/allowed_mime_types(마이그레이션 0081)다.
- * 이 검사는 DB에 들어가는 값이 화면 안내와 어긋나지 않게 하는 용도. */
-function uploadedFromForm(formData: FormData): UploadedAttachment[] {
-  const raw = String(formData.get("uploadedAttachments") ?? "").trim();
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((item) => {
-      if (typeof item !== "object" || item === null) return [];
-      const { path, fileName, contentType, size } = item as Record<string, unknown>;
-      if (typeof path !== "string" || !path || typeof fileName !== "string" || !fileName) return [];
-      return [{
-        path,
-        fileName,
-        contentType: typeof contentType === "string" ? contentType : "",
-        size: typeof size === "number" ? size : 0,
-      }];
-    });
-  } catch {
-    return [];
-  }
-}
-
+/** 첨부파일은 브라우저가 Storage로 직접 올리고 이 액션은 위치만 받는다 —
+ * 이유와 보안상 함의는 lib/attachmentPolicy.ts 맨 위 주석 참고. */
 function attachmentRows(entryId: string, uploaded: UploadedAttachment[]) {
   return uploaded.map((u) => ({
     entry_id: entryId,
@@ -92,10 +66,8 @@ export async function createWorkJournalEntry(
 
   // 브라우저가 이미 Storage에 올려둔 파일들의 위치. 검사에 걸리면 저장을
   // 시작하기 전에 그 파일부터 지운다(고아 파일 방지).
-  const uploaded = uploadedFromForm(formData);
-  const fileError = validateAttachmentFiles(
-    uploaded.map((u) => ({ name: u.fileName, type: u.contentType, size: u.size }))
-  );
+  const uploaded = parseUploadedAttachments(formData);
+  const fileError = validateAttachmentFiles("journal", asFileLike(uploaded));
   if (fileError) {
     discardUploadedFiles(uploaded);
     return { error: fileError };
@@ -158,7 +130,7 @@ export async function updateWorkJournalEntry(
   // 🐛 2026-09-29 수정: 예전엔 이 액션이 formData의 파일을 아예 읽지 않아
   // 수정 화면에서 첨부를 추가해도 조용히 사라졌다(오류도 안 났다). 등록과
   // 똑같이 처리한다.
-  const uploaded = uploadedFromForm(formData);
+  const uploaded = parseUploadedAttachments(formData);
 
   // 개수 상한은 "이미 붙어 있는 것 + 이번에 추가하는 것"으로 센다.
   const { count: existingCount } = uploaded.length
@@ -167,10 +139,7 @@ export async function updateWorkJournalEntry(
         .select("id", { count: "exact", head: true })
         .eq("entry_id", id)
     : { count: 0 };
-  const fileError = validateAttachmentFiles(
-    uploaded.map((u) => ({ name: u.fileName, type: u.contentType, size: u.size })),
-    existingCount ?? 0
-  );
+  const fileError = validateAttachmentFiles("journal", asFileLike(uploaded), existingCount ?? 0);
   if (fileError) {
     discardUploadedFiles(uploaded);
     return { error: fileError };
