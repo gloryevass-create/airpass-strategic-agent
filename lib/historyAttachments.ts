@@ -32,7 +32,19 @@ const HISTORY_ATTACHMENT_ALLOWED_TYPES = [
   "application/zip",
   "application/x-zip-compressed",
 ];
-export const HISTORY_ATTACHMENT_MAX_SIZE = 12 * 1024 * 1024;
+// ⚠️ 상한이 12MB → 4MB로 내려간 게 아니라, **12MB는 처음부터 동작한 적이 없다**
+// (2026-09-29 확인). 이 화면들은 파일 바이트를 Server Action으로 보내는데 그
+// 본문 상한이 기본 1MB였고(next.config.ts에 설정이 없었다), 그걸 4MB로 올린 게
+// 지금 상태다. 더는 못 올린다 — Vercel Functions의 요청 본문 4.5MB는 요금제와
+// 무관한 플랫폼 하드 리밋이다.
+//
+// 그리고 그 4MB는 **파일 하나가 아니라 요청 전체**(고른 파일 전부 + 폼 필드)에
+// 걸린다. 그래서 화면 문구도 "파일당"이 아니라 "합계"라고 적는다.
+//
+// 이보다 큰 첨부가 필요하면 Work Journal처럼 브라우저 → Supabase Storage 직접
+// 업로드로 바꿔야 한다(lib/workJournalUpload.ts) — 그 경로는 Vercel을 아예
+// 거치지 않아 상한이 사라진다.
+export const HISTORY_ATTACHMENT_MAX_SIZE = 4 * 1024 * 1024;
 export const HISTORY_ATTACHMENT_MAX_COUNT = 5;
 const HISTORY_ATTACHMENTS_BUCKET = "history-attachments";
 
@@ -49,7 +61,7 @@ export function validateHistoryAttachmentFiles(files: File[]): string | null {
       return `${file.name}: 이미지·PDF·Office 문서·ZIP 파일만 올릴 수 있습니다.`;
     }
     if (file.size > HISTORY_ATTACHMENT_MAX_SIZE) {
-      return `${file.name}: 파일은 12MB 이하만 올릴 수 있습니다.`;
+      return `${file.name}: 첨부파일은 한 번에 합계 4MB까지만 올릴 수 있습니다.`;
     }
   }
   return null;

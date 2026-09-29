@@ -309,7 +309,7 @@ export function VendorManager({ vendors }: { vendors: Vendor[] }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
             <strong style={{ fontSize: 14 }}>업체 문서</strong>
             <span className="text-muted" style={{ fontSize: 11 }}>
-              JPG·PNG·WebP·PDF, 파일당 12MB 이하
+              JPG·PNG·WebP·PDF, 4MB 이하
             </span>
           </div>
           <div className="vendor-doc-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "var(--space-3)" }}>

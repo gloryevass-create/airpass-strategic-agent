@@ -92,7 +92,7 @@ export function MemoEditForm({ memo }: { memo: MemoDetail }) {
           className="input"
         />
         <p className="text-muted" style={{ fontSize: 12, margin: "var(--space-1) 0 0" }}>
-          이미지·PDF·Office 문서·ZIP, 파일당 12MB 이하, 최대 5개
+          이미지·PDF·Office 문서·ZIP, 한 번에 올리는 파일 합계 4MB 이하, 최대 5개
         </p>
       </div>
 

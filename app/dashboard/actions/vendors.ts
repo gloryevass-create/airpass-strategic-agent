@@ -116,8 +116,10 @@ export async function uploadVendorDocument(formData: FormData): Promise<UploadVe
   if (!allowed.includes(file.type)) {
     return { ok: false, error: "JPG, PNG, WebP, PDF 파일만 올릴 수 있습니다." };
   }
-  if (file.size > 12 * 1024 * 1024) {
-    return { ok: false, error: "파일은 12MB 이하만 올릴 수 있습니다." };
+  // 상한 4MB의 근거는 lib/historyAttachments.ts 주석 참고(Server Action 본문
+  // 1MB 기본값 → 4MB로 상향, Vercel 4.5MB가 그 위의 하드 리밋).
+  if (file.size > 4 * 1024 * 1024) {
+    return { ok: false, error: "파일은 4MB 이하만 올릴 수 있습니다." };
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());

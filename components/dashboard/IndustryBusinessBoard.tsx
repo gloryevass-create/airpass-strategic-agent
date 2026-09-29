@@ -575,7 +575,7 @@ function HistorySection({ project }: { project: BusinessProjectV2 }) {
           accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
         />
         <p className="text-muted" style={{ fontSize: 11, margin: 0 }}>
-          이미지·PDF·Office 문서·ZIP, 파일당 12MB 이하, 최대 5개
+          이미지·PDF·Office 문서·ZIP, 한 번에 올리는 파일 합계 4MB 이하, 최대 5개
         </p>
         {state?.error && <p style={{ color: "var(--color-accent-900)", fontSize: 13 }}>{state.error}</p>}
         <button type="submit" className="btn btn-primary" style={{ alignSelf: "flex-start" }} disabled={pending}>

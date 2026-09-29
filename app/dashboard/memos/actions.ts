@@ -12,7 +12,7 @@ import { safeStorageFileName } from "@/lib/storageKey";
 
 const CATEGORIES: MemoCategory[] = ["business", "cooperation", "marketing", "etc"];
 
-// 협력사 서류 첨부(vendors.ts)와 동일한 크기 상한(12MB)을 쓰되, 메모는 스크린샷·
+// 협력사 서류 첨부(vendors.ts)와 동일한 크기 상한을 쓰되, 메모는 스크린샷·
 // 기획서·시트 등 더 다양한 자료가 붙으므로 MIME 화이트리스트는 이미지/PDF/오피스
 // 문서/ZIP까지 넓게 잡는다. 이전에는 크기·형식 제한이 전혀 없었고 업로드 실패가
 // 조용히 무시돼(`continue`) 사용자가 원인을 알 수 없었다 — 이제 저장 전에 미리
@@ -32,7 +32,19 @@ const MEMO_ATTACHMENT_ALLOWED_TYPES = [
   "application/zip",
   "application/x-zip-compressed",
 ];
-const MEMO_ATTACHMENT_MAX_SIZE = 12 * 1024 * 1024;
+// ⚠️ 상한이 12MB → 4MB로 내려간 게 아니라, **12MB는 처음부터 동작한 적이 없다**
+// (2026-09-29 확인). 이 화면들은 파일 바이트를 Server Action으로 보내는데 그
+// 본문 상한이 기본 1MB였고(next.config.ts에 설정이 없었다), 그걸 4MB로 올린 게
+// 지금 상태다. 더는 못 올린다 — Vercel Functions의 요청 본문 4.5MB는 요금제와
+// 무관한 플랫폼 하드 리밋이다.
+//
+// 그리고 그 4MB는 **파일 하나가 아니라 요청 전체**(고른 파일 전부 + 폼 필드)에
+// 걸린다. 그래서 화면 문구도 "파일당"이 아니라 "합계"라고 적는다.
+//
+// 이보다 큰 첨부가 필요하면 Work Journal처럼 브라우저 → Supabase Storage 직접
+// 업로드로 바꿔야 한다(lib/workJournalUpload.ts) — 그 경로는 Vercel을 아예
+// 거치지 않아 상한이 사라진다.
+const MEMO_ATTACHMENT_MAX_SIZE = 4 * 1024 * 1024;
 const MEMO_ATTACHMENT_MAX_COUNT = 5;
 
 /** 업로드 시도 전에 미리 검증해서, 저장 실패가 조용히 무시되지 않고 사용자에게
@@ -46,7 +58,7 @@ function validateMemoFiles(files: File[]): string | null {
       return `${file.name}: 이미지·PDF·Office 문서·ZIP 파일만 올릴 수 있습니다.`;
     }
     if (file.size > MEMO_ATTACHMENT_MAX_SIZE) {
-      return `${file.name}: 파일은 12MB 이하만 올릴 수 있습니다.`;
+      return `${file.name}: 첨부파일은 한 번에 합계 4MB까지만 올릴 수 있습니다.`;
     }
   }
   return null;
