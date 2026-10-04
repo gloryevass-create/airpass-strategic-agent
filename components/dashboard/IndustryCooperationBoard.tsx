@@ -546,7 +546,7 @@ function CommentsSection({ project }: { project: CooperationProject }) {
                 <span>{c.authorEmail}</span>
                 <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
                   {formatDateTime(c.createdAt)}
-                  {c.isOwn && (
+                  {c.canDelete && (
                     <button
                       type="button"
                       onClick={() => handleDelete(c.id)}

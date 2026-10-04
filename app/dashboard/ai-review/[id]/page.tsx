@@ -7,6 +7,8 @@ import { deleteAiReview } from "@/app/dashboard/actions/aiReviews";
 import { DeleteMemoButton } from "@/components/DeleteMemoButton";
 import { MarkdownContent, extractHeadings } from "@/components/dashboard/MarkdownContent";
 import { AiReviewCommentForm } from "@/components/AiReviewCommentForm";
+import { CommentDeleteButton } from "@/components/CommentDeleteButton";
+import { deleteAiReviewComment } from "@/app/dashboard/actions/aiReviews";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
@@ -86,8 +88,13 @@ export default async function AiReviewDetailPage({ params }: { params: Params })
             <div style={{ display: "grid", gap: "var(--space-3)", marginBottom: "var(--space-5)" }}>
               {review.comments.map((c) => (
                 <div key={c.id} className="card blueprint" style={{ fontSize: 13 }}>
-                  <div className="text-muted" style={{ marginBottom: 6 }}>
-                    {c.authorDisplay} · {formatDateTime(c.createdAt)}
+                  <div className="text-muted" style={{ marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <span>
+                      {c.authorDisplay} · {formatDateTime(c.createdAt)}
+                    </span>
+                    {(c.authorId === user.id || profile?.role === "admin") && (
+                      <CommentDeleteButton commentId={c.id} action={deleteAiReviewComment} />
+                    )}
                   </div>
                   <div style={{ whiteSpace: "pre-wrap" }}>{c.content}</div>
                 </div>

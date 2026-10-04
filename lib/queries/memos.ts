@@ -70,7 +70,7 @@ export type MemoDetail = {
     driveFileId: string | null;
     fileSize: number | null;
   }[];
-  comments: { id: string; authorEmail: string; content: string; createdAt: string }[];
+  comments: { id: string; authorId: string; authorEmail: string; content: string; createdAt: string }[];
 };
 
 export async function getMemoDetail(supabase: Client, id: string): Promise<MemoDetail | null> {
@@ -104,6 +104,7 @@ export async function getMemoDetail(supabase: Client, id: string): Promise<MemoD
     })),
     comments: (comments ?? []).map((c) => ({
       id: c.id,
+      authorId: c.author_id,
       authorEmail: authorDisplayById.get(c.author_id) ?? c.author_email,
       content: c.content,
       createdAt: c.created_at,

@@ -11,7 +11,9 @@ export type CooperationProjectComment = {
   authorEmail: string;
   content: string;
   createdAt: string;
-  isOwn: boolean;
+  /** 삭제 버튼을 보여줄지 — 작성자 본인이거나 관리자(2026-10-04). 히스토리의
+   * isOwn("본인만 수정 가능")과 달리 관리자를 포함하므로 이름을 구분했다. */
+  canDelete: boolean;
 };
 
 export type CooperationProjectHistoryEntry = {
@@ -67,7 +69,7 @@ export async function getCooperationProjects(supabase: Client): Promise<Cooperat
   // 같은 요청 안에서 이미 끝난 결과를 그대로 받는다.
   const { user } = await requireAuthedClient();
 
-  const [{ data }, { data: comments }, { data: history }, { data: attachments }, authorDisplayById, { data: favorites }] =
+  const [{ data }, { data: comments }, { data: history }, { data: attachments }, authorDisplayById, { data: favorites }, { data: me }] =
     await Promise.all([
       // 수정(관계 이동 포함)한 항목이 칸반 보드 맨 위로 오도록 생성일이 아니라
       // 최근 수정일 기준 최신순으로 정렬한다(SI Business와 동일, 사용자 확인 2026-08-23).
@@ -84,7 +86,11 @@ export async function getCooperationProjects(supabase: Client): Promise<Cooperat
       fetchAuthorDisplayById(supabase),
       // 즐겨찾기는 SI Business(0072)와 동일한 방식(2026-09-12).
       supabase.from("cooperation_projects_favorites").select("project_id").eq("user_id", user.id),
+    // 댓글 삭제 버튼 노출 판단용 — 관리자는 남의 댓글도 지울 수 있다(2026-10-04).
+    supabase.from("profiles").select("role").eq("id", user.id).maybeSingle(),
     ]);
+
+  const isAdmin = me?.role === "admin";
 
   const favoriteIds = new Set((favorites ?? []).map((f) => f.project_id));
 
@@ -107,7 +113,7 @@ export async function getCooperationProjects(supabase: Client): Promise<Cooperat
       authorEmail: authorDisplayById.get(c.author_id) ?? c.author_email,
       content: c.content,
       createdAt: c.created_at,
-      isOwn: c.author_id === user?.id,
+      canDelete: c.author_id === user?.id || isAdmin,
     });
     commentsByProject.set(c.project_id, list);
   }

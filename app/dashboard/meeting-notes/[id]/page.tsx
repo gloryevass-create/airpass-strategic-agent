@@ -7,6 +7,8 @@ import { deleteMeetingNote } from "@/app/dashboard/actions/meetingNotes";
 import { DeleteMemoButton } from "@/components/DeleteMemoButton";
 import { MarkdownContent, extractHeadings } from "@/components/dashboard/MarkdownContent";
 import { MeetingNoteCommentForm } from "@/components/MeetingNoteCommentForm";
+import { CommentDeleteButton } from "@/components/CommentDeleteButton";
+import { deleteMeetingNoteComment } from "@/app/dashboard/actions/meetingNotes";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "";
@@ -103,8 +105,13 @@ export default async function MeetingNoteDetailPage({ params }: { params: Params
             <div style={{ display: "grid", gap: "var(--space-3)", marginBottom: "var(--space-5)" }}>
               {note.comments.map((c) => (
                 <div key={c.id} className="card blueprint" style={{ fontSize: 13 }}>
-                  <div className="text-muted" style={{ marginBottom: 6 }}>
-                    {c.authorDisplay} · {formatDateTime(c.createdAt)}
+                  <div className="text-muted" style={{ marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <span>
+                      {c.authorDisplay} · {formatDateTime(c.createdAt)}
+                    </span>
+                    {(c.authorId === user.id || profile?.role === "admin") && (
+                      <CommentDeleteButton commentId={c.id} action={deleteMeetingNoteComment} />
+                    )}
                   </div>
                   <div style={{ whiteSpace: "pre-wrap" }}>{c.content}</div>
                 </div>

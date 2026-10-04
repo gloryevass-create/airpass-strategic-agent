@@ -472,7 +472,7 @@ function ProjectComments({ project }: { project: BusinessProjectV2 }) {
               <span className="font-medium text-ink">{c.authorEmail}</span>
               <div className="flex items-center gap-2 text-xs text-ink-mute">
                 <span>{formatDateTime(c.createdAt)}</span>
-                {c.isOwn && (
+                {c.canDelete && (
                   <button
                     type="button"
                     onClick={() => handleDelete(c.id)}

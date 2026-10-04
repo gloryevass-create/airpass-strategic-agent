@@ -7,6 +7,8 @@ import { MemoCommentForm } from "@/components/MemoCommentForm";
 import { DeleteMemoButton } from "@/components/DeleteMemoButton";
 import { deleteMemo } from "@/app/dashboard/memos/actions";
 import { driveFileViewUrl } from "@/lib/googleDriveAttachments";
+import { CommentDeleteButton } from "@/components/CommentDeleteButton";
+import { deleteMemoComment } from "@/app/dashboard/memos/actions";
 
 const CATEGORY_LABEL: Record<string, string> = {
   business: "SI Business",
@@ -155,8 +157,13 @@ export default async function MemoDetailPage({
         <div style={{ display: "grid", gap: "var(--space-3)", marginBottom: "var(--space-5)" }}>
           {memo.comments.map((c) => (
             <div key={c.id} className="card blueprint" style={{ fontSize: 13 }}>
-              <div className="text-muted" style={{ marginBottom: 6 }}>
-                {c.authorEmail} · {formatDate(c.createdAt)}
+              <div className="text-muted" style={{ marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <span>
+                  {c.authorEmail} · {formatDate(c.createdAt)}
+                </span>
+                {(c.authorId === user.id || profile?.role === "admin") && (
+                  <CommentDeleteButton commentId={c.id} action={deleteMemoComment} />
+                )}
               </div>
               <div style={{ whiteSpace: "pre-wrap" }}>{c.content}</div>
             </div>

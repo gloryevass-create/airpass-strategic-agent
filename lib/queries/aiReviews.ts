@@ -13,6 +13,7 @@ export type AiReviewListItem = {
 
 export type AiReviewComment = {
   id: string;
+  authorId: string;
   authorDisplay: string;
   content: string;
   createdAt: string;
@@ -72,6 +73,7 @@ export async function getAiReviewDetail(supabase: Client, id: string): Promise<A
     updatedAt: review.updated_at,
     comments: (comments ?? []).map((c) => ({
       id: c.id,
+      authorId: c.author_id,
       authorDisplay: authorDisplayById.get(c.author_id) ?? c.author_email,
       content: c.content,
       createdAt: c.created_at,

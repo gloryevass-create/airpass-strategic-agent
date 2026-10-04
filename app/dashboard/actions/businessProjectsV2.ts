@@ -178,8 +178,27 @@ export async function createBusinessProjectV2Comment(
   return undefined;
 }
 
+
+/** 댓글은 작성자 본인 또는 관리자만 지울 수 있다(2026-10-04, RLS 0084와 같은 규칙).
+ * RLS만 믿으면 안 되는 이유: 막힌 delete는 에러 없이 0행 처리라 호출부가
+ * 성공으로 오해한다. */
+async function canDeleteComment(
+  supabase: Awaited<ReturnType<typeof requireAuthedClient>>["supabase"],
+  userId: string,
+  table: "business_projects_v2_comments",
+  commentId: string
+): Promise<boolean> {
+  const [{ data: comment }, { data: profile }] = await Promise.all([
+    supabase.from(table).select("author_id").eq("id", commentId).maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+  ]);
+  if (!comment) return false;
+  return comment.author_id === userId || profile?.role === "admin";
+}
+
 export async function deleteBusinessProjectV2Comment(commentId: string): Promise<void> {
-  const { supabase } = await requireAuthedClient();
+  const { supabase, user } = await requireAuthedClient();
+  if (!(await canDeleteComment(supabase, user.id, "business_projects_v2_comments", commentId))) return;
   await supabase.from("business_projects_v2_comments").delete().eq("id", commentId);
   revalidateBusinessPaths();
 }

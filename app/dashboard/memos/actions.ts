@@ -275,3 +275,21 @@ export async function createComment(
   revalidatePath(`/dashboard/memos/${memoId}`);
   return undefined;
 }
+
+/** 댓글 삭제 — 작성자 본인 또는 관리자만(2026-10-04, RLS 0084와 같은 규칙).
+ * RLS만 믿지 않고 여기서도 확인한다: 막힌 delete는 에러 없이 0행 처리라
+ * 호출부가 성공으로 오해한다. 지울 수 없으면 조용히 아무것도 하지 않는다
+ * (애초에 권한이 있을 때만 버튼이 보이므로 여기 도달하면 비정상 요청이다). */
+export async function deleteMemoComment(commentId: string): Promise<void> {
+  const { supabase, user } = await requireAuthedClient();
+
+  const [{ data: comment }, { data: profile }] = await Promise.all([
+    supabase.from("ad_strategy_memo_comments").select("memo_id, author_id").eq("id", commentId).maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+  ]);
+  if (!comment) return;
+  if (comment.author_id !== user.id && profile?.role !== "admin") return;
+
+  await supabase.from("ad_strategy_memo_comments").delete().eq("id", commentId);
+  revalidatePath(`/dashboard/memos/${comment.memo_id}`);
+}

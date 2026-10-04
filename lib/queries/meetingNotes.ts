@@ -14,6 +14,7 @@ export type MeetingNoteListItem = {
 
 export type MeetingNoteComment = {
   id: string;
+  authorId: string;
   authorDisplay: string;
   content: string;
   createdAt: string;
@@ -85,6 +86,7 @@ export async function getMeetingNoteDetail(supabase: Client, id: string): Promis
     updatedAt: note.updated_at,
     comments: (comments ?? []).map((c) => ({
       id: c.id,
+      authorId: c.author_id,
       authorDisplay: authorDisplayById.get(c.author_id) ?? c.author_email,
       content: c.content,
       createdAt: c.created_at,
