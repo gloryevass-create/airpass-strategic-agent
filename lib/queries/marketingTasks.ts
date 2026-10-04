@@ -22,7 +22,8 @@ export type MarketingTaskHistoryEntry = {
   content: string;
   createdAt: string;
   updatedAt: string;
-  isOwn: boolean;
+  /** 수정·삭제 버튼을 보여줄지 — 작성자 본인이거나 관리자(2026-10-04). */
+  canModify: boolean;
   attachments: HistoryAttachment[];
 };
 
@@ -125,7 +126,7 @@ export async function getMarketingTasks(supabase: Client): Promise<MarketingTask
       content: h.content,
       createdAt: h.created_at,
       updatedAt: h.updated_at,
-      isOwn: h.author_id === user?.id,
+      canModify: h.author_id === user?.id || isAdmin,
       attachments: attachmentsByHistory.get(h.id) ?? [],
     });
     historyByTask.set(h.task_id, list);

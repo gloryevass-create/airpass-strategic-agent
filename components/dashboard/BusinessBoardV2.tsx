@@ -333,7 +333,7 @@ function HistoryEntryRow({ entry }: { entry: BusinessProjectV2HistoryEntry }) {
             {entry.authorEmail}
             {wasEdited && <span className="ml-1">(수정됨)</span>}
           </span>
-          {entry.isOwn && (
+          {entry.canModify && (
             <button
               type="button"
               onClick={(e) => {

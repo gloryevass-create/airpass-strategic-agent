@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database.types";
 import { after } from "next/server";
-import { driveFileViewUrl } from "@/lib/googleDriveAttachments";
+import { deleteAttachmentFromDrive, driveFileViewUrl } from "@/lib/googleDriveAttachments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   ATTACHMENT_POLICY,
@@ -89,4 +89,32 @@ export async function resolveHistoryAttachmentUrls(
   }
 
   return map;
+}
+
+/** 히스토리를 지운 뒤 남는 첨부파일 실물을 응답 이후에 정리한다(2026-10-04,
+ * 히스토리 삭제 기능 추가와 함께). 첨부 **행**은 cascade로 이미 사라지므로
+ * 여기서는 Storage 오브젝트와 구글드라이브 파일만 치운다 — 안 치우면 참조가
+ * 끊긴 고아 파일이 쌓인다(실제로 Work Journal에서 그렇게 200MB가 남았었다).
+ *
+ * after() 안에서는 세션 쿠키를 다시 쓸 수 없어 service_role로 지운다. 지울
+ * 대상은 응답 전에 권한을 확인한 히스토리에서 읽어온 값이다. */
+export function cleanUpHistoryAttachmentFilesAfterResponse(
+  attachments: { storage_path: string | null; drive_file_id: string | null }[]
+): void {
+  const paths = attachments.map((a) => a.storage_path).filter((p): p is string => Boolean(p));
+  const driveIds = attachments.map((a) => a.drive_file_id).filter((i): i is string => Boolean(i));
+  if (paths.length === 0 && driveIds.length === 0) return;
+
+  after(async () => {
+    try {
+      await Promise.all([
+        paths.length
+          ? createAdminClient().storage.from(HISTORY_ATTACHMENTS_BUCKET).remove(paths)
+          : Promise.resolve(),
+        ...driveIds.map((id) => deleteAttachmentFromDrive(id)),
+      ]);
+    } catch (e) {
+      console.error("[historyAttachments] 첨부파일 정리 실패:", e instanceof Error ? e.message : e);
+    }
+  });
 }

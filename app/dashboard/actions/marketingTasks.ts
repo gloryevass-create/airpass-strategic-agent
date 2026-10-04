@@ -6,6 +6,7 @@ import { notifyTeamAfterResponse } from "@/lib/notifyTeam";
 import {
   buildHistoryAttachmentRows,
   discardUploadedHistoryFiles,
+  cleanUpHistoryAttachmentFilesAfterResponse,
   validateHistoryAttachmentFiles,
 } from "@/lib/historyAttachments";
 import { parseUploadedAttachments } from "@/lib/attachmentPolicy";
@@ -235,12 +236,51 @@ export async function createMarketingTaskHistoryEntry(
   return undefined;
 }
 
+/** 히스토리는 작성자 본인 또는 관리자만 수정·삭제할 수 있다(2026-10-04, RLS
+ * 0085와 같은 규칙 — 그 전에는 수정만 가능했고 작성자 본인만 할 수 있었다).
+ * RLS에 막힌 update/delete는 에러 없이 0행 처리라 서버에서도 확인한다. */
+async function canModifyHistory(
+  supabase: Awaited<ReturnType<typeof requireAuthedClient>>["supabase"],
+  userId: string,
+  historyId: string
+): Promise<boolean> {
+  const [{ data: entry }, { data: profile }] = await Promise.all([
+    supabase.from("marketing_tasks_history").select("author_id").eq("id", historyId).maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+  ]);
+  if (!entry) return false;
+  return entry.author_id === userId || profile?.role === "admin";
+}
+
+const HISTORY_FORBIDDEN = "본인이 작성한 히스토리만 수정·삭제할 수 있습니다.";
+
+/** 히스토리 삭제(2026-10-04 추가). 첨부파일 행은 cascade로 함께 사라지지만
+ * 실물 파일은 남으므로, 지우기 전에 경로를 챙겨 응답 이후에 정리한다. */
+export async function deleteMarketingTaskHistoryEntry(historyId: string): Promise<void> {
+  const { supabase, user } = await requireAuthedClient();
+  if (!(await canModifyHistory(supabase, user.id, historyId))) return;
+
+  const { data: attachments } = await supabase
+    .from("marketing_tasks_history_attachments")
+    .select("storage_path, drive_file_id")
+    .eq("history_id", historyId);
+
+  await supabase.from("marketing_tasks_history").delete().eq("id", historyId);
+  cleanUpHistoryAttachmentFilesAfterResponse(attachments ?? []);
+
+  revalidatePath(PATH);
+}
+
 export async function updateMarketingTaskHistoryEntry(
   historyId: string,
   _prevState: MarketingTaskHistoryState,
   formData: FormData
 ): Promise<MarketingTaskHistoryState> {
-  const { supabase } = await requireAuthedClient();
+  const { supabase, user } = await requireAuthedClient();
+
+  if (!(await canModifyHistory(supabase, user.id, historyId))) {
+    return { error: HISTORY_FORBIDDEN };
+  }
 
   const content = String(formData.get("content") ?? "").trim();
   if (!content) return { error: "히스토리 내용을 입력하세요." };

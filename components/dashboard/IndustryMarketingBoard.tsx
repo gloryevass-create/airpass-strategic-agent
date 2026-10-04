@@ -14,6 +14,7 @@ import {
   deleteMarketingTaskComment,
   createMarketingTaskHistoryEntry,
   updateMarketingTaskHistoryEntry,
+  deleteMarketingTaskHistoryEntry,
 } from "@/app/dashboard/actions/marketingTasks";
 import { useAttachmentUpload } from "@/lib/attachmentUpload";
 import { AttachmentPicker, AttachmentProgress } from "@/components/AttachmentPicker";
@@ -364,6 +365,7 @@ function AddTaskDialog({ members, onClose }: { members: string[]; onClose: () =>
 function HistoryRow({ entry }: { entry: MarketingTaskHistoryEntry }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [deleting, startDelete] = useTransition();
   const action = updateMarketingTaskHistoryEntry.bind(null, entry.id);
   const [state, formAction, pending] = useActionState(action, undefined);
   const firstLine = entry.content.split("\n")[0];
@@ -427,18 +429,35 @@ function HistoryRow({ entry }: { entry: MarketingTaskHistoryEntry }) {
             {entry.authorEmail}
             {wasEdited && <span style={{ marginLeft: 4 }}>(수정됨)</span>}
           </span>
-          {entry.isOwn && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditing(true);
-              }}
-              className="btn btn-ghost"
-              style={{ fontSize: 11, padding: "2px 6px", minHeight: "auto" }}
-            >
-              수정
-            </button>
+          {entry.canModify && (
+            <span style={{ display: "flex", gap: 4 }}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(true);
+                }}
+                className="btn btn-ghost"
+                style={{ fontSize: 11, padding: "2px 6px", minHeight: "auto" }}
+              >
+                수정
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!window.confirm("이 히스토리를 삭제할까요? 첨부파일도 함께 지워집니다.")) return;
+                  startDelete(() => {
+                    void deleteMarketingTaskHistoryEntry(entry.id);
+                  });
+                }}
+                className="btn btn-ghost"
+                style={{ fontSize: 11, padding: "2px 6px", minHeight: "auto" }}
+              >
+                {deleting ? "삭제 중..." : "삭제"}
+              </button>
+            </span>
           )}
         </div>
       )}
