@@ -2478,6 +2478,7 @@ export type Database = {
       work_journal_entries: {
         Row: {
           id: string;
+          author_id: string | null;
           author_name: string;
           week_label: string | null;
           entry_date: string | null;
@@ -2487,6 +2488,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          author_id?: string | null;
           author_name: string;
           week_label?: string | null;
           entry_date?: string | null;
@@ -2496,6 +2498,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          author_id?: string | null;
           author_name?: string;
           week_label?: string | null;
           entry_date?: string | null;

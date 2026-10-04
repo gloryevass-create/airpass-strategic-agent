@@ -176,7 +176,7 @@ function EntryForm({
               <p className="text-muted" style={{ fontSize: 12, margin: "0 0 var(--space-1)" }}>
                 기존 첨부파일
               </p>
-              <AttachmentList entry={entry} />
+              <AttachmentList entry={entry} canModify />
             </div>
           )}
         </div>
@@ -204,7 +204,7 @@ function EntryForm({
 /** 카드가 접혀 있어도(펼치지 않아도) 첨부파일명·링크가 바로 보여야 한다는 피드백으로
  * (2026-09-03) 클릭해서 불러오는 방식을 없애고 항상 마운트 시 바로 불러온다 — 목록
  * 카드와 수정 폼 양쪽에서 동일하게 쓴다. */
-function AttachmentList({ entry }: { entry: WorkJournalEntry }) {
+function AttachmentList({ entry, canModify }: { entry: WorkJournalEntry; canModify: boolean }) {
   const [urls, setUrls] = useState<Record<string, string> | null>(null);
   const [loading, setLoading] = useState(false);
   const [, startTransition] = useTransition();
@@ -263,14 +263,16 @@ function AttachmentList({ entry }: { entry: WorkJournalEntry }) {
                 ) : (
                   <span style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.fileName}</span>
                 )}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(a.id)}
-                  style={{ background: "none", border: 0, padding: 0, color: "var(--color-accent-900)", cursor: "pointer", font: "inherit" }}
-                  aria-label="첨부파일 삭제"
-                >
-                  ✕
-                </button>
+                {canModify && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(a.id)}
+                    style={{ background: "none", border: 0, padding: 0, color: "var(--color-accent-900)", cursor: "pointer", font: "inherit" }}
+                    aria-label="첨부파일 삭제"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             );
           })}
@@ -282,7 +284,15 @@ function AttachmentList({ entry }: { entry: WorkJournalEntry }) {
 
 /* ─────────────────────────── 항목 카드 ─────────────────────────── */
 
-function EntryCard({ entry, onEdit }: { entry: WorkJournalEntry; onEdit: () => void }) {
+function EntryCard({
+  entry,
+  canModify,
+  onEdit,
+}: {
+  entry: WorkJournalEntry;
+  canModify: boolean;
+  onEdit: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [, startTransition] = useTransition();
   const lines = useMemo(() => entry.content.split("\n"), [entry.content]);
@@ -321,17 +331,21 @@ function EntryCard({ entry, onEdit }: { entry: WorkJournalEntry; onEdit: () => v
             {expanded ? "접기 ▲" : "펼치기 ▼"}
           </button>
         )}
-        <button type="button" className="btn btn-secondary blueprint" onClick={onEdit}>
-          수정
-        </button>
-        <button type="button" className="btn btn-ghost" onClick={handleDelete}>
-          삭제
-        </button>
+        {canModify && (
+          <>
+            <button type="button" className="btn btn-secondary blueprint" onClick={onEdit}>
+              수정
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={handleDelete}>
+              삭제
+            </button>
+          </>
+        )}
       </div>
       {displayLines.map((line, i) => (
         <RenderLine key={i} line={line} />
       ))}
-      {entry.attachments.length > 0 && <AttachmentList entry={entry} />}
+      {entry.attachments.length > 0 && <AttachmentList entry={entry} canModify={canModify} />}
     </div>
   );
 }
@@ -342,11 +356,19 @@ export function IndustryWorkJournalBoard({
   entries,
   members,
   currentUserName,
+  currentUserId,
+  isAdmin,
 }: {
   entries: WorkJournalEntry[];
   members: string[];
   currentUserName: string | null;
+  currentUserId: string;
+  isAdmin: boolean;
 }) {
+  /** 작성자 본인 또는 관리자만 수정·삭제할 수 있다(2026-10-04). 기준은 화면에
+   * 보이는 작성자 이름이 아니라 실제로 등록한 사람(authorId)이다 — 다른 팀원
+   * 몫으로 대신 기록할 수 있어 둘이 다를 수 있기 때문. */
+  const canModify = (entry: WorkJournalEntry) => isAdmin || entry.authorId === currentUserId;
   const [authorFilter, setAuthorFilter] = useState("전체");
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -382,8 +404,12 @@ export function IndustryWorkJournalBoard({
   useEffect(() => {
     const openId = searchParams.get("open");
     if (!openId) return;
-    if (entries.some((e) => e.id === openId)) setEditingId(openId);
+    // 알림을 누른 사람이 그 일지의 작성자가 아니면 수정 폼을 열지 않는다 —
+    // 열어줘도 저장 단계에서 막히고, 내용은 목록 카드에서 그대로 보인다.
+    const target = entries.find((e) => e.id === openId);
+    if (target && canModify(target)) setEditingId(openId);
     router.replace("/dashboard/work-journal");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, entries, router]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -454,7 +480,7 @@ export function IndustryWorkJournalBoard({
           </p>
         </div>
       ) : (
-        filtered.map((e) => <EntryCard key={e.id} entry={e} onEdit={() => setEditingId(e.id)} />)
+        filtered.map((e) => <EntryCard key={e.id} entry={e} canModify={canModify(e)} onEdit={() => setEditingId(e.id)} />)
       )}
       </div>
     </div>

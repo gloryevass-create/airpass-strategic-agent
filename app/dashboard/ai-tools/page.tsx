@@ -5,7 +5,10 @@ import { AiToolsBoard } from "@/components/dashboard/AiToolsBoard";
 
 export default async function AiToolsPage() {
   const { supabase, user } = await requireAuthedClient();
-  const tools = await getAiTools(supabase);
+  const [tools, profile] = await Promise.all([
+    getAiTools(supabase),
+    supabase.from("profiles").select("role").eq("id", user.id).maybeSingle().then((r) => r.data),
+  ]);
 
-  return <AiToolsBoard tools={tools} currentUserId={user.id} />;
+  return <AiToolsBoard tools={tools} currentUserId={user.id} isAdmin={profile?.role === "admin"} />;
 }

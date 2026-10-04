@@ -13,6 +13,10 @@ export type WorkJournalAttachment = {
 
 export type WorkJournalEntry = {
   id: string;
+  /** 이 행을 실제로 등록한 사람. 화면에 보이는 authorName("누구의 업무인지")과
+   * 다를 수 있다 — 수정·삭제 권한은 이쪽을 따른다(0083). 2026-10-04 이전에
+   * 등록돼 이름이 profiles와 매칭되지 않은 행은 null일 수 있다(관리자만 수정 가능). */
+  authorId: string | null;
   authorName: string;
   weekLabel: string | null;
   entryDate: string | null;
@@ -52,6 +56,7 @@ export async function getWorkJournalEntries(supabase: Client): Promise<WorkJourn
 
   return (entries ?? []).map((e) => ({
     id: e.id,
+    authorId: e.author_id,
     authorName: e.author_name,
     weekLabel: e.week_label,
     entryDate: e.entry_date,

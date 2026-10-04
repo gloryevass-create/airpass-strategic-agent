@@ -45,6 +45,29 @@ function discardUploadedFiles(uploaded: UploadedAttachment[]): void {
 
 export type WorkJournalFormState = { error?: string } | undefined;
 
+/** 작성자 본인 또는 관리자만 수정·삭제할 수 있다(2026-10-04, Memo Board·Meeting
+ * Notes·AI Review와 같은 규칙). RLS(0083)가 이미 막지만 서버 액션에서도 확인한다 —
+ * RLS에 걸린 update/delete는 **에러 없이 0행 처리**라, 확인하지 않으면 화면에
+ * "저장되었습니다"가 뜨고 실제로는 아무것도 안 바뀐다.
+ *
+ * author_id는 "이 행을 만든 사람"이고, 화면에 보이는 author_name은 "누구의
+ * 업무인지"다(다른 팀원 몫으로 대신 기록할 수 있어 둘이 다를 수 있다). 수정
+ * 권한은 전자를 따른다. */
+async function canModifyEntry(
+  supabase: Awaited<ReturnType<typeof requireAuthedClient>>["supabase"],
+  userId: string,
+  entryId: string
+): Promise<boolean> {
+  const [{ data: entry }, { data: profile }] = await Promise.all([
+    supabase.from("work_journal_entries").select("author_id").eq("id", entryId).maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+  ]);
+  if (!entry) return false;
+  return entry.author_id === userId || profile?.role === "admin";
+}
+
+const NOT_AUTHOR_ERROR = "본인이 작성한 업무일지만 수정·삭제할 수 있습니다.";
+
 function fieldsFromForm(formData: FormData) {
   return {
     author_name: String(formData.get("authorName") ?? "").trim(),
@@ -58,7 +81,7 @@ export async function createWorkJournalEntry(
   _prevState: WorkJournalFormState,
   formData: FormData
 ): Promise<WorkJournalFormState> {
-  const { supabase } = await requireAuthedClient();
+  const { supabase, user } = await requireAuthedClient();
 
   const fields = fieldsFromForm(formData);
   if (!fields.author_name) return { error: "작성자를 선택하세요." };
@@ -75,7 +98,9 @@ export async function createWorkJournalEntry(
 
   const { data: entry, error } = await supabase
     .from("work_journal_entries")
-    .insert(fields)
+    // author_id는 폼에서 고른 author_name과 별개로 **실제로 등록한 사람**이다
+    // (수정 권한의 기준 — canModifyEntry 주석 참고).
+    .insert({ ...fields, author_id: user.id })
     .select("id")
     .single();
   if (error || !entry) {
@@ -121,7 +146,9 @@ export async function updateWorkJournalEntry(
   _prevState: WorkJournalFormState,
   formData: FormData
 ): Promise<WorkJournalFormState> {
-  const { supabase } = await requireAuthedClient();
+  const { supabase, user } = await requireAuthedClient();
+
+  if (!(await canModifyEntry(supabase, user.id, id))) return { error: NOT_AUTHOR_ERROR };
 
   const fields = fieldsFromForm(formData);
   if (!fields.author_name) return { error: "작성자를 선택하세요." };
@@ -170,7 +197,8 @@ export async function updateWorkJournalEntry(
 }
 
 export async function deleteWorkJournalEntry(id: string): Promise<void> {
-  const { supabase } = await requireAuthedClient();
+  const { supabase, user } = await requireAuthedClient();
+  if (!(await canModifyEntry(supabase, user.id, id))) return;
   const { data: attachments } = await supabase
     .from("work_journal_attachments")
     .select("storage_path, drive_file_id")
@@ -211,7 +239,15 @@ function cleanUpAttachmentFilesAfterResponse(
 }
 
 export async function deleteWorkJournalAttachment(attachmentId: string): Promise<void> {
-  const { supabase } = await requireAuthedClient();
+  const { supabase, user } = await requireAuthedClient();
+  // 첨부는 상위 일지의 권한을 따른다 — 남의 일지에서 파일만 떼어낼 수 있으면
+  // 본문만 막아둔 의미가 없다(0083의 RLS와 같은 규칙).
+  const { data: owner } = await supabase
+    .from("work_journal_attachments")
+    .select("entry_id")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (!owner || !(await canModifyEntry(supabase, user.id, owner.entry_id))) return;
   // 행을 지우면서 그 행의 파일 정보를 응답으로 함께 받아온다(2026-09-17) —
   // 예전엔 조회 → 파일 삭제 → 행 삭제를 줄줄이 기다렸는데, 파일 정리는
   // 뒷정리라 응답 이후로 미룰 수 있다(위 cleanUp... 주석 참고).

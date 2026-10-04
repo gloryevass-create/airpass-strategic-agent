@@ -55,9 +55,16 @@ function ToolForm({ tool, onDone }: { tool: AiTool | null; onDone: (saved: boole
   );
 }
 
-function ToolCard({ tool, currentUserId, onEdit }: { tool: AiTool; currentUserId: string; onEdit: () => void }) {
+function ToolCard({
+  tool,
+  canModify,
+  onEdit,
+}: {
+  tool: AiTool;
+  canModify: boolean;
+  onEdit: () => void;
+}) {
   const [, startTransition] = useTransition();
-  const isOwn = tool.authorId === currentUserId;
 
   function handleDelete() {
     if (!window.confirm("이 링크를 삭제하시겠습니까?")) return;
@@ -77,7 +84,7 @@ function ToolCard({ tool, currentUserId, onEdit }: { tool: AiTool; currentUserId
         >
           {tool.title}
         </a>
-        {isOwn && (
+        {canModify && (
           <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
             <button type="button" className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 6px", minHeight: "auto" }} onClick={onEdit}>
               수정
@@ -101,7 +108,17 @@ function ToolCard({ tool, currentUserId, onEdit }: { tool: AiTool; currentUserId
   );
 }
 
-export function AiToolsBoard({ tools, currentUserId }: { tools: AiTool[]; currentUserId: string }) {
+export function AiToolsBoard({
+  tools,
+  currentUserId,
+  isAdmin,
+}: {
+  tools: AiTool[];
+  currentUserId: string;
+  isAdmin: boolean;
+}) {
+  // 서버 액션(canModifyTool)은 예전부터 관리자도 허용했는데 화면에서는 본인
+  // 것에만 버튼이 보여서, 관리자가 UI로는 손댈 수 없었다(2026-10-04 정리).
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const editingTool = editingId && editingId !== "new" ? (tools.find((t) => t.id === editingId) ?? null) : null;
 
@@ -171,7 +188,12 @@ export function AiToolsBoard({ tools, currentUserId }: { tools: AiTool[]; curren
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "var(--space-4)" }}>
             {filteredTools.map((t) => (
-              <ToolCard key={t.id} tool={t} currentUserId={currentUserId} onEdit={() => setEditingId(t.id)} />
+              <ToolCard
+                key={t.id}
+                tool={t}
+                canModify={isAdmin || t.authorId === currentUserId}
+                onEdit={() => setEditingId(t.id)}
+              />
             ))}
           </div>
         )}
