@@ -12,6 +12,18 @@ src = Image.open("design/app-icon-source.png").convert("RGB")
 # 60px 더 안쪽을 잘라 **둥근 모서리를 프레임 밖으로 내보낸다** — 홈 화면·독은
 # OS가 자기 모양으로 깎으므로, 미리 둥근 이미지를 주면 모서리에 흰 자국이 남는다.
 base = src.crop((162, 162, 862, 862))
+
+# 배경을 검정으로 바꾼다(2026-10-06 요청). 전체를 어둡게 하거나 남색을 빼면
+# 링 색이 청록으로 틀어지므로, **배경색에 가까운 픽셀만** 검정으로 치환한다.
+from PIL import ImageChops, ImageStat
+W, H = base.size
+tiles = [base.crop(b) for b in [(0,0,60,60),(W-60,0,W,60),(0,H-60,60,H),(W-60,H-60,W,H)]]
+navy = tuple(round(sum(ImageStat.Stat(t).mean[i] for t in tiles)/4) for i in range(3))
+diff = ImageChops.difference(base, Image.new("RGB", base.size, navy)).convert("L")
+mask = diff.point(lambda v: 0 if v <= 8 else (255 if v >= 36 else int((v-8)/28*255)))
+black = Image.new("RGB", base.size, (0, 0, 0)); black.paste(base, (0, 0), mask)
+base = black
+
 base.resize((180, 180), Image.LANCZOS).save("public/apple-touch-icon.png", optimize=True)
 base.resize((192, 192), Image.LANCZOS).save("public/icon-192.png", optimize=True)
 base.resize((512, 512), Image.LANCZOS).save("public/icon-512.png", optimize=True)
