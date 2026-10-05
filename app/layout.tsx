@@ -14,8 +14,11 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "Strategic Agent",
   },
+  // 아이콘 파일을 교체해도 브라우저·iOS가 예전 것을 오래 캐시하므로 URL에 버전을
+  // 붙여 새로 받게 한다(2026-10-06 아이콘 교체). 이미 홈 화면에 추가해 둔 바로가기는
+  // 이걸로도 안 바뀌어서, 삭제하고 다시 추가해야 새 아이콘이 적용된다.
   icons: {
-    apple: "/apple-touch-icon.png",
+    apple: "/apple-touch-icon.png?v=2",
   },
 };
 
