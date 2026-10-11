@@ -1,7 +1,7 @@
 import "@/components/industryTheme.css";
 import Link from "next/link";
 import { requireAuthedClient } from "@/lib/supabase/authed";
-import { getBusinessCards, BUSINESS_CARD_PAGE_SIZE } from "@/lib/queries/businessCards";
+import { getBusinessCards, type BusinessCardSort } from "@/lib/queries/businessCards";
 import { BusinessCardBoard } from "@/components/dashboard/BusinessCardBoard";
 
 /** 리멤버 명함첩 — 개인 데이터라 헤더의 개인 메뉴 아래(회원정보 수정·비밀번호
@@ -10,11 +10,17 @@ import { BusinessCardBoard } from "@/components/dashboard/BusinessCardBoard";
 export default async function BusinessCardsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; group?: string }>;
+  searchParams: Promise<{ q?: string; group?: string; page?: string; sort?: string }>;
 }) {
   const { supabase } = await requireAuthedClient();
   const params = await searchParams;
-  const list = await getBusinessCards(supabase, { search: params.q, group: params.group });
+  const sort: BusinessCardSort = params.sort === "name" ? "name" : "registered";
+  const list = await getBusinessCards(supabase, {
+    search: params.q,
+    group: params.group,
+    page: Number(params.page) || 1,
+    sort,
+  });
 
   return (
     <div className="industry-theme" style={{ padding: "var(--space-8) var(--space-6)", minHeight: "auto" }}>
@@ -53,9 +59,12 @@ export default async function BusinessCardsPage({
           matched={list.matched}
           total={list.total}
           groups={list.groups}
-          pageSize={BUSINESS_CARD_PAGE_SIZE}
+          ungrouped={list.ungrouped}
+          page={list.page}
+          pageCount={list.pageCount}
           search={params.q ?? ""}
           group={params.group ?? ""}
+          sort={sort}
         />
       </div>
     </div>
