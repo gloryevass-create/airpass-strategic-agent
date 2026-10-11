@@ -25,11 +25,12 @@ function isItemActive(pathname: string | null, item: LeafItem): boolean {
   return isActivePath(pathname, item.href);
 }
 
-// WORKSPACE는 사용자가 Claude Design으로 만든 사이드바 디자인("관리자 페이지
-// 메뉴 디자인")대로 접히지 않는 고정 상단 목록(브랜드 박스 아래 flat list)이고,
-// 그 아래 GROUPS만 펼치기/접기가 있는 그룹이다(2026-08-28 — 이전에는 WORKSPACE도
-// 다른 그룹처럼 접었다 폈다 할 수 있었는데, 이 디자인에서는 상단 고정 목록과
-// 접이식 그룹을 구분해서 그린다).
+// WORKSPACE는 브랜드 박스 아래 평평한 상단 목록이고, 그 아래 GROUPS는 접이식
+// 그룹이다. 2026-08-28엔 WORKSPACE를 "접히지 않는 고정 목록"으로 뒀는데,
+// 13인치 노트북처럼 세로가 짧은 화면에서는 이 목록(10줄)이 공간을 다 먹어
+// 아래쪽 그룹을 고르기 어렵다는 피드백으로 다시 접을 수 있게 했다
+// (2026-10-11). 헤더에 이미 달려 있던 꺾쇠(chevron)가 그동안 아무 동작도
+// 하지 않아 오해를 주던 것도 함께 해소된다.
 const TOP_ITEMS: LeafItem[] = [
   // 하루를 여는 브리핑이라 맨 위에 둔다(2026-09-17) — 어제/오늘/내일의 일정·변동·기한을
   // 한 화면에 모은다.
@@ -100,6 +101,15 @@ const GROUPS: GroupItem[] = [
 // 기본으로 접혀 있는 그룹 — "데이터베이스"는 자주 안 쓰는 참고용 공공 DB 목록,
 // "menu backup"은 이전 디자인을 보관만 해두는 용도라 기본은 접힌 상태로 시작한다.
 const DEFAULT_COLLAPSED_GROUPS = ["데이터베이스", "menu backup"];
+
+/** WORKSPACE 상단 목록도 그룹과 같은 접힘 상태 집합으로 관리한다 — 라벨이
+ * 그룹 이름과 겹치지 않도록 일반 라벨로 쓸 수 없는 키를 쓴다. */
+const WORKSPACE_KEY = "__workspace__";
+
+/** 접힘 상태를 기기에 기억해 둔다. 화면이 좁아 WORKSPACE를 접어둔 사람이
+ * 새로고침할 때마다 다시 접어야 하면 의미가 없다(보드 화면들의
+ * "Save as defaults"와 같은 localStorage 방식). */
+const COLLAPSE_STORAGE_KEY = "sidebar:collapsed-groups";
 
 function NavSpinner() {
   const { pending } = useLinkStatus();
@@ -176,6 +186,19 @@ export function DashboardSidebar({
   const [railCollapsed, setRailCollapsed] = useState(false);
   const { open, close } = useMobileNav();
 
+  // localStorage는 서버에서 읽을 수 없으므로 첫 렌더는 기본값으로 그리고
+  // 마운트 후에 복원한다(useState 초기값에서 읽으면 hydration 불일치가 난다).
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(COLLAPSE_STORAGE_KEY);
+      if (saved) setCollapsedGroups(new Set(JSON.parse(saved) as string[]));
+    } catch {
+      // 사생활 보호 모드 등에서 접근이 막히면 기본값 그대로 쓴다.
+    }
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   // 모바일에서 링크를 눌러 페이지가 바뀌면 드로어를 자동으로 닫는다(각 행의
   // onClick으로도 닫히지만, 그룹 헤더 클릭 없이 바로 이동하는 다른 경로 대비 안전망).
   useEffect(() => {
@@ -188,6 +211,11 @@ export function DashboardSidebar({
       const next = new Set(prev);
       if (next.has(label)) next.delete(label);
       else next.add(label);
+      try {
+        window.localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // 저장 실패는 무시한다 — 이번 세션 동안은 그대로 동작한다.
+      }
       return next;
     });
   }
@@ -196,6 +224,10 @@ export function DashboardSidebar({
   // 상태에서 하위 항목만 펼쳐지면 어떤 그룹인지 알 수 없기 때문(디자인 원본과
   // 동일한 동작).
   const showLabels = !railCollapsed;
+
+  // 레일이 접혀 아이콘만 남은 상태에서는 상단 목록이 유일한 주 메뉴라 항상
+  // 보여준다 — 그때는 접기 버튼(라벨·꺾쇠)도 그리지 않는다.
+  const topItemsExpanded = !showLabels || !collapsedGroups.has(WORKSPACE_KEY);
 
   return (
     <>
@@ -211,28 +243,51 @@ export function DashboardSidebar({
             동일한 동작(사용자 확인, 2026-08-28). */}
         <div className="flex shrink-0 flex-col gap-1 p-2 pb-0">
           <div className="px-1 pb-2 pt-1">
-            <div className={`ds-sidebar-brand${showLabels ? "" : " collapsed"}`}>
-              <NavIcon
-                name="sparkle"
-                className="h-[18px] w-[18px] shrink-0 ds-sidebar-brand-sparkle"
-                style={{ color: "var(--sb-accent-700)" }}
-              />
-              {showLabels && (
-                <>
-                  <span className="flex-1 text-[15px] font-bold tracking-wide" style={{ color: "var(--sb-accent-700)" }}>
-                    WORKSPACE
-                  </span>
-                  <NavIcon name="chevron" className="h-3 w-3 rotate-90 shrink-0" style={{ color: "var(--sb-text-mute)" }} />
-                </>
-              )}
-            </div>
+            {/* 라벨이 보일 때만 누를 수 있는 버튼으로 그린다 — 아이콘만 남은
+                레일에서는 접어봐야 무엇이 접혔는지 알 수 없기 때문. */}
+            {showLabels ? (
+              <button
+                type="button"
+                onClick={() => toggleGroup(WORKSPACE_KEY)}
+                aria-expanded={topItemsExpanded}
+                title={topItemsExpanded ? "WORKSPACE 접기" : "WORKSPACE 펼치기"}
+                className="ds-sidebar-brand"
+              >
+                <NavIcon
+                  name="sparkle"
+                  className="h-[18px] w-[18px] shrink-0 ds-sidebar-brand-sparkle"
+                  style={{ color: "var(--sb-accent-700)" }}
+                />
+                <span
+                  className="flex-1 text-left text-[15px] font-bold tracking-wide"
+                  style={{ color: "var(--sb-accent-700)" }}
+                >
+                  WORKSPACE
+                </span>
+                <NavIcon
+                  name="chevron"
+                  className={`h-3 w-3 shrink-0 transition-transform ${topItemsExpanded ? "rotate-90" : ""}`}
+                  style={{ color: "var(--sb-text-mute)" }}
+                />
+              </button>
+            ) : (
+              <div className="ds-sidebar-brand collapsed">
+                <NavIcon
+                  name="sparkle"
+                  className="h-[18px] w-[18px] shrink-0 ds-sidebar-brand-sparkle"
+                  style={{ color: "var(--sb-accent-700)" }}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-col gap-0.5 px-1">
-            {TOP_ITEMS.map((item) => (
-              <TopRow key={item.href} item={item} active={isItemActive(pathname, item)} showLabel={showLabels} />
-            ))}
-          </div>
+          {topItemsExpanded && (
+            <div className="flex flex-col gap-0.5 px-1">
+              {TOP_ITEMS.map((item) => (
+                <TopRow key={item.href} item={item} active={isItemActive(pathname, item)} showLabel={showLabels} />
+              ))}
+            </div>
+          )}
 
           {showLabels && <div className="ds-sidebar-divider" />}
         </div>
