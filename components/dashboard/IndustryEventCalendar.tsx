@@ -371,7 +371,7 @@ function EventDialog({
 
   return (
     <div className="dialog-backdrop" onClick={onClose}>
-      <div className="dialog" style={{ width: "min(560px,100%)", maxHeight: "88vh", overflowY: "auto", background: "#ffffff" }} onClick={(e) => e.stopPropagation()}>
+      <div className="dialog" style={{ width: "min(560px,100%)", maxHeight: "92vh", overflowY: "auto", background: "#ffffff" }} onClick={(e) => e.stopPropagation()}>
         <div className="dialog-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.5">
             <rect x="3" y="4" width="18" height="17" rx="0" />

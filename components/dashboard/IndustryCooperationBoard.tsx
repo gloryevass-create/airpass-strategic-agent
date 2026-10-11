@@ -269,7 +269,7 @@ function AddProjectDialog({ members, onClose }: { members: string[]; onClose: ()
     <div className="dialog-backdrop" onClick={onClose}>
       <div
         className="dialog"
-        style={{ width: "min(640px,100%)", maxHeight: "88vh", overflowY: "auto", background: "#ffffff" }}
+        style={{ width: "min(640px,100%)", maxHeight: "92vh", overflowY: "auto", background: "#ffffff" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
