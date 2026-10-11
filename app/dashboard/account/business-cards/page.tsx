@@ -23,7 +23,7 @@ export default async function BusinessCardsPage({
   });
 
   return (
-    <div className="industry-theme" style={{ padding: "var(--space-8) var(--space-6)", minHeight: "auto" }}>
+    <div className="industry-theme board-page-content" style={{ padding: "var(--space-8) var(--space-6)", minHeight: "auto" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <Link
           href="/dashboard/calendar"

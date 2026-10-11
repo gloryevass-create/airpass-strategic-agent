@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { BusinessCard, BusinessCardGroupCount, BusinessCardSort } from "@/lib/queries/businessCards";
 import { UNGROUPED } from "@/lib/queries/businessCards";
@@ -26,7 +26,7 @@ function CardRow({ card, onDelete, busy }: { card: BusinessCard; onDelete: () =>
       }}
     >
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 15 }}>{card.name}</div>
+        <div className="bc-name" style={{ fontWeight: 600, fontSize: 15 }}>{card.name}</div>
         {card.company && <div style={sub}>{card.company}</div>}
       </div>
       <div style={{ minWidth: 0 }}>
@@ -41,7 +41,7 @@ function CardRow({ card, onDelete, busy }: { card: BusinessCard; onDelete: () =>
         {card.email && <div style={{ fontSize: 14 }}>{card.email}</div>}
         {card.address && <div style={sub}>{card.address}</div>}
       </div>
-      <div style={{ textAlign: "right" }}>
+      <div className="bc-actions" style={{ textAlign: "right" }}>
         <button
           type="button"
           className="btn btn-ghost"
@@ -58,12 +58,25 @@ function CardRow({ card, onDelete, busy }: { card: BusinessCard; onDelete: () =>
 
 /* ─────────────────────────── 페이지 번호 ─────────────────────────── */
 
-/** 리멤버처럼 번호를 10개씩 묶어 보여준다(‹ 1 2 … 10 ›). */
+/** 리멤버처럼 번호를 묶어 보여준다(‹ 1 2 … 10 ›). 좁은 화면에서는 한 줄에
+ * 담기지 않아 5개로 줄인다 — 버튼을 더 좁히면 손가락으로 누르기 어려워진다.
+ *
+ * 서버 렌더 때는 window를 볼 수 없으므로 일단 데스크톱(10개)으로 그리고
+ * 마운트 후에 바꾼다(처음부터 window를 읽으면 hydration 불일치가 난다). */
 function Pagination({ page, pageCount, onGo }: { page: number; pageCount: number; onGo: (p: number) => void }) {
+  const [perBlock, setPerBlock] = useState(10);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setPerBlock(mq.matches ? 5 : 10);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   if (pageCount <= 1) return null;
-  const block = Math.floor((page - 1) / 10);
-  const start = block * 10 + 1;
-  const end = Math.min(pageCount, start + 9);
+  const block = Math.floor((page - 1) / perBlock);
+  const start = block * perBlock + 1;
+  const end = Math.min(pageCount, start + perBlock - 1);
   const nums = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
   const btn = (active: boolean) =>
@@ -82,15 +95,15 @@ function Pagination({ page, pageCount, onGo }: { page: number; pageCount: number
 
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, padding: "var(--space-5) 0", flexWrap: "wrap" }}>
-      <button type="button" style={btn(false)} disabled={page <= 1} onClick={() => onGo(page - 1)} aria-label="이전 페이지">
+      <button type="button" className="bc-page-btn" style={btn(false)} disabled={page <= 1} onClick={() => onGo(page - 1)} aria-label="이전 페이지">
         ‹
       </button>
       {nums.map((n) => (
-        <button key={n} type="button" style={btn(n === page)} onClick={() => onGo(n)} aria-current={n === page ? "page" : undefined}>
+        <button key={n} type="button" className="bc-page-btn" style={btn(n === page)} onClick={() => onGo(n)} aria-current={n === page ? "page" : undefined}>
           {n}
         </button>
       ))}
-      <button type="button" style={btn(false)} disabled={page >= pageCount} onClick={() => onGo(page + 1)} aria-label="다음 페이지">
+      <button type="button" className="bc-page-btn" style={btn(false)} disabled={page >= pageCount} onClick={() => onGo(page + 1)} aria-label="다음 페이지">
         ›
       </button>
     </div>
@@ -259,10 +272,13 @@ export function BusinessCardBoard({
       <div className="two-col-section" style={{ display: "grid", gridTemplateColumns: "220px minmax(0,1fr)", gap: "var(--space-5)", alignItems: "start" }}>
         {/* ── 왼쪽: 그룹 ── */}
         <div className="card blueprint" style={{ background: "#ffffff", padding: "var(--space-3)" }}>
-          <div className="card-kicker" style={{ padding: "0 10px var(--space-2)" }}>명함첩</div>
-          {railItem("전체 명함", "", total)}
-          {groups.map((g) => railItem(g.name, g.name, g.count))}
-          {ungrouped > 0 && railItem("미분류 명함", UNGROUPED, ungrouped)}
+          <div className="card-kicker bc-rail-kicker" style={{ padding: "0 10px var(--space-2)" }}>명함첩</div>
+          {/* 좁은 화면에서는 이 묶음이 가로 스크롤 칩 한 줄이 된다(industryTheme.css). */}
+          <div className="bc-rail-groups">
+            {railItem("전체 명함", "", total)}
+            {groups.map((g) => railItem(g.name, g.name, g.count))}
+            {ungrouped > 0 && railItem("미분류 명함", UNGROUPED, ungrouped)}
+          </div>
 
           <div style={{ borderTop: "1px solid var(--color-divider)", margin: "var(--space-3) 0 var(--space-2)" }} />
           <button type="button" className="btn btn-secondary blueprint" style={{ width: "100%" }} onClick={() => setShowUpload((v) => !v)}>
