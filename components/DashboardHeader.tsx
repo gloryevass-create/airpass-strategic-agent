@@ -102,6 +102,16 @@ export function DashboardHeader({
                 <NavIcon name="key" className="h-3.5 w-3.5" />
                 비밀번호 변경
               </Link>
+              {/* 명함첩은 본인만 보는 개인 데이터라 사이드바(팀 공용 메뉴)가 아니라
+                  여기 개인 메뉴에 둔다(2026-10-11). */}
+              <Link
+                href="/dashboard/account/business-cards"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-canvas-cream"
+              >
+                <NavIcon name="receipt" className="h-3.5 w-3.5" />
+                리멤버 명함
+              </Link>
             </div>
           )}
         </div>

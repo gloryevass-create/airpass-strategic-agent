@@ -2628,6 +2628,69 @@ export type Database = {
         };
         Relationships: [];
       };
+      business_cards: {
+        Row: {
+          id: string;
+          owner_id: string;
+          company: string | null;
+          name: string;
+          department: string | null;
+          title: string | null;
+          email: string | null;
+          address: string | null;
+          work_phone: string | null;
+          work_fax: string | null;
+          mobile: string | null;
+          registered_on: string | null;
+          card_book: string | null;
+          group_name: string | null;
+          memo: string | null;
+          created_at: string;
+          updated_at: string;
+          dedup_key: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          company?: string | null;
+          name: string;
+          department?: string | null;
+          title?: string | null;
+          email?: string | null;
+          address?: string | null;
+          work_phone?: string | null;
+          work_fax?: string | null;
+          mobile?: string | null;
+          registered_on?: string | null;
+          card_book?: string | null;
+          group_name?: string | null;
+          memo?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          dedup_key: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          company?: string | null;
+          name?: string;
+          department?: string | null;
+          title?: string | null;
+          email?: string | null;
+          address?: string | null;
+          work_phone?: string | null;
+          work_fax?: string | null;
+          mobile?: string | null;
+          registered_on?: string | null;
+          card_book?: string | null;
+          group_name?: string | null;
+          memo?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          dedup_key?: string;
+        };
+        Relationships: [];
+      };
       todos: {
         Row: {
           id: string;
