@@ -518,7 +518,10 @@ function EventDialog({
           )}
           <div className="field">
             <label>내용</label>
-            <textarea className="input" name="content" defaultValue={event?.content ?? ""} rows={3} />
+            {/* 회의 내용을 여러 줄 적는 칸이라 3줄은 너무 좁다는 요청으로 6줄로
+                늘렸다(2026-10-12). 다이얼로그가 길어져도 저장·취소 버튼은 바닥에
+                고정돼 있어(.dialog-actions sticky) 가려지지 않는다. */}
+            <textarea className="input" name="content" defaultValue={event?.content ?? ""} rows={6} />
           </div>
           {state?.error && <p style={{ color: "var(--color-accent-900)", fontSize: 13 }}>{state.error}</p>}
           <div className="dialog-actions">
