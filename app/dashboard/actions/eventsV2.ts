@@ -59,6 +59,20 @@ function kstLocalToIso(value: string): string {
   return new Date(`${value}:00+09:00`).toISOString();
 }
 
+/** 종료일시가 시작일시보다 빠르면 달력에서 **그 일정이 아예 사라진다** —
+ * eventsOnDay()가 `day >= 시작 && day <= 종료`로 거르는데 둘이 뒤집히면 어떤
+ * 날짜도 통과하지 못하기 때문이다. 그래서 "등록은 됐는데 화면에 없다"로
+ * 보이고, 실제로 사용자가 같은 일정을 두 번 등록한 사례가 두 번 있었다
+ * (2026-10-02 스마트빌리지 summit, 2026-10-12 하남 어린이회관 자문단회의).
+ * 저장 단계에서 막는다. */
+function dateRangeError(fields: { date_start: string; date_end: string | null }): string | null {
+  if (!fields.date_end) return null;
+  if (fields.date_end < fields.date_start) {
+    return "종료일시가 시작일시보다 빠릅니다. 날짜와 오전/오후를 확인해 주세요.";
+  }
+  return null;
+}
+
 function fieldsFromForm(formData: FormData) {
   const dateStart = String(formData.get("dateStart") ?? "").trim();
   const dateEnd = String(formData.get("dateEnd") ?? "").trim();
@@ -111,6 +125,8 @@ export async function createTeamEventV2(
   const fields = fieldsFromForm(formData);
   if (!fields.title) return { error: "일정 제목을 입력하세요." };
   if (!fields.date_start) return { error: "일시를 입력하세요." };
+  const rangeError = dateRangeError(fields);
+  if (rangeError) return { error: rangeError };
 
   const destination = destinationFromForm(formData);
 
@@ -186,6 +202,8 @@ export async function updateTeamEventV2(
   const fields = fieldsFromForm(formData);
   if (!fields.title) return { error: "일정 제목을 입력하세요." };
   if (!fields.date_start) return { error: "일시를 입력하세요." };
+  const rangeError = dateRangeError(fields);
+  if (rangeError) return { error: rangeError };
 
   const wantsGoogleSync = destinationFromForm(formData) === "both";
 

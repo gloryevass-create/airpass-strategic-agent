@@ -102,19 +102,29 @@ function buildMonthGrid(month: string): string[][] {
   return weeks;
 }
 
+/** 종료가 시작보다 빠른 일정은 `day >= 시작 && day <= 종료`를 어떤 날짜도
+ * 만족하지 못해 **달력에서 통째로 사라진다**. 2026-10-12에 실제로 그런 행이
+ * 3건 있었고(그중 2건은 날짜까지 역전돼 안 보였다) 사용자는 "등록이 안 된다"고
+ * 느꼈다. 저장 단계에서 막았지만(actions/eventsV2.ts::dateRangeError) 이미
+ * 저장된 행과 외부에서 들어온 구글 일정까지 감출 이유는 없으므로, 뒤집힌
+ * 경우에는 하루짜리로 보고 시작일에 표시한다. */
+function lastDayOf(startDay: string, endIso: string | null): string {
+  if (!endIso) return startDay;
+  const end = toKstDateStr(endIso);
+  return end < startDay ? startDay : end;
+}
+
 function eventsOnDay(events: TeamEventV2[], day: string): TeamEventV2[] {
   return events.filter((e) => {
     const start = toKstDateStr(e.dateStart);
-    const end = e.dateEnd ? toKstDateStr(e.dateEnd) : start;
-    return day >= start && day <= end;
+    return day >= start && day <= lastDayOf(start, e.dateEnd);
   });
 }
 
 function googleEventsOnDay(events: GoogleCalendarEvent[], day: string): GoogleCalendarEvent[] {
   return events.filter((e) => {
     const start = toKstDateStr(e.dateStart);
-    const end = e.dateEnd ? toKstDateStr(e.dateEnd) : start;
-    return day >= start && day <= end;
+    return day >= start && day <= lastDayOf(start, e.dateEnd);
   });
 }
 
@@ -368,6 +378,9 @@ function EventDialog({
   }
 
   const defaultStart = event ? toDatetimeLocalValue(event.dateStart) : defaultDate ? `${defaultDate}T09:00` : "";
+  // 종료일시 입력칸의 min으로 써서 시작보다 빠른 값을 브라우저가 먼저 막게 한다
+  // (서버에서도 다시 검사한다 — AI 입력창 등 다른 경로가 있으므로).
+  const [startValue, setStartValue] = useState(defaultStart);
 
   return (
     <div className="dialog-backdrop" onClick={onClose}>
@@ -390,11 +403,24 @@ function EventDialog({
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
             <div className="field">
               <label>시작일시 *</label>
-              <input className="input" name="dateStart" type="datetime-local" defaultValue={defaultStart} required />
+              <input
+                className="input"
+                name="dateStart"
+                type="datetime-local"
+                defaultValue={defaultStart}
+                onChange={(e) => setStartValue(e.target.value)}
+                required
+              />
             </div>
             <div className="field">
               <label>종료일시</label>
-              <input className="input" name="dateEnd" type="datetime-local" defaultValue={toDatetimeLocalValue(event?.dateEnd ?? null)} />
+              <input
+                className="input"
+                name="dateEnd"
+                type="datetime-local"
+                min={startValue || undefined}
+                defaultValue={toDatetimeLocalValue(event?.dateEnd ?? null)}
+              />
             </div>
           </div>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
