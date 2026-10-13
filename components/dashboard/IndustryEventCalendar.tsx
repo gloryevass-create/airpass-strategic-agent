@@ -613,7 +613,16 @@ function DayItemPill({ item, onEditTeam, big }: { item: DayItem; onEditTeam: (e:
 
 /* ─────────────────────────── 구글 캘린더 연결 상태 ─────────────────────────── */
 
-function GoogleCalendarControl({ connection }: { connection: GoogleCalendarConnection | null }) {
+function GoogleCalendarControl({
+  connection,
+  authRevoked,
+}: {
+  connection: GoogleCalendarConnection | null;
+  /** 연결 행은 남아 있는데 구글이 토큰을 거부한 상태. 예전에는 이때도 그냥
+   * "연결됨"으로만 보여서, 구글 일정만 조용히 사라지는 바람에 사용자가
+   * "해지한 적 없는데 해지됐다"고 느꼈다(2026-10-13 제보). */
+  authRevoked: boolean;
+}) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -635,11 +644,29 @@ function GoogleCalendarControl({ connection }: { connection: GoogleCalendarConne
   }
 
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, flexWrap: "wrap" }}>
       <span className="text-muted" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <span style={{ flex: "none", width: 8, height: 8, borderRadius: "50%", background: GOOGLE_DOT_COLOR }} />
-        {connection.googleEmail} 연결됨
+        <span
+          style={{
+            flex: "none",
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: authRevoked ? "#ef4444" : GOOGLE_DOT_COLOR,
+          }}
+        />
+        {connection.googleEmail} {authRevoked ? "연결 만료됨" : "연결됨"}
       </span>
+      {authRevoked && (
+        <>
+          <span style={{ color: "var(--color-accent-900)" }}>
+            구글이 연결을 더 이상 인정하지 않습니다 — 다시 연결해 주세요.
+          </span>
+          <a href="/auth/google-calendar/connect" className="btn btn-secondary" style={{ fontSize: 12 }}>
+            다시 연결
+          </a>
+        </>
+      )}
       <button type="button" className="btn btn-ghost" onClick={handleDisconnect} style={{ fontSize: 12 }}>
         연결 해제
       </button>
@@ -658,6 +685,7 @@ export function IndustryEventCalendar({
   currentUserId,
   googleConnection,
   googleEvents,
+  googleAuthRevoked,
   googleConnected,
   googleError,
 }: {
@@ -669,6 +697,7 @@ export function IndustryEventCalendar({
   currentUserId: string;
   googleConnection: GoogleCalendarConnection | null;
   googleEvents: GoogleCalendarEvent[];
+  googleAuthRevoked: boolean;
   googleConnected: boolean;
   googleError: string | null;
 }) {
@@ -816,7 +845,7 @@ export function IndustryEventCalendar({
             개인 구글계정을 등록하고 연동하면 캘린더에서 개인 일정도 확인이 가능합니다.(본인 일정에만 노출)
           </p>
         </div>
-        <GoogleCalendarControl connection={googleConnection} />
+        <GoogleCalendarControl connection={googleConnection} authRevoked={googleAuthRevoked} />
       </div>
 
       {googleBanner && (

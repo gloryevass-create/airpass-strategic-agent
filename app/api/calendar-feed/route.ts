@@ -76,9 +76,9 @@ export async function GET(request: NextRequest) {
     getGoogleCalendarConnection(admin, tokenRow.user_id),
   ]);
 
-  const googleEvents = googleConnection
+  const google = googleConnection
     ? await getMyGoogleCalendarEvents(admin, tokenRow.user_id, rangeStart, rangeEnd)
-    : [];
+    : { events: [], authRevoked: false };
 
   return NextResponse.json({
     user: { name: profile?.name ?? null, email: profile?.email ?? null },
@@ -86,8 +86,11 @@ export async function GET(request: NextRequest) {
     range: { start: rangeStart, end: rangeEnd },
     personalGoogleCalendar: {
       connected: Boolean(googleConnection),
+      // 연결 행은 있는데 구글이 토큰을 거부한 상태 — 호출하는 쪽(외부 에이전트)이
+      // "일정이 0건"과 "연결이 끊김"을 구분할 수 있어야 한다(2026-10-13).
+      needsReconnect: google.authRevoked,
       googleEmail: googleConnection?.googleEmail ?? null,
-      events: googleEvents,
+      events: google.events,
     },
     teamCalendar: {
       events: teamEvents,

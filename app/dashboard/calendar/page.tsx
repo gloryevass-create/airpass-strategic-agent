@@ -27,7 +27,7 @@ export default async function Events2Page({ searchParams }: { searchParams: Sear
   const { supabase, user } = await requireAuthedClient();
   const { rangeStart, rangeEnd } = eventsV2RangeForMonth(month);
 
-  const [events, members, googleConnection, googleEvents] = await Promise.all([
+  const [events, members, googleConnection, google] = await Promise.all([
     getTeamEventsV2(supabase, month),
     getTeamMemberNames(supabase),
     getGoogleCalendarConnection(supabase, user.id),
@@ -43,7 +43,8 @@ export default async function Events2Page({ searchParams }: { searchParams: Sear
       members={members}
       currentUserId={user.id}
       googleConnection={googleConnection}
-      googleEvents={googleEvents}
+      googleEvents={google.events}
+      googleAuthRevoked={google.authRevoked}
       googleConnected={googleConnected === "1"}
       googleError={googleError ?? null}
     />
