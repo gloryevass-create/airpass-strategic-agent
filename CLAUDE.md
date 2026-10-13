@@ -151,6 +151,33 @@ HTML 템플릿(`buildMaterialEmailHtml`)과는 완전히 별개다(그건 안 �
 
 ## 첨부파일 저장소 (제조사 서류 / Work Journal / Memo Board)
 
+> **⚠️ 2026-09-29부터 첨부파일은 브라우저가 Supabase Storage로 직접 올린다.**
+> 아래 서술은 "서버 액션이 파일 바이트를 받아 올리던" 이전 구조를 설명하는
+> 부분이 많으니, 새 코드를 짤 때는 이 블록을 기준으로 삼을 것.
+>
+> 이유: Server Action 본문 상한이 기본 1MB였고(설정한 적이 없어 화면의
+> "12MB 이하"는 한 번도 동작한 적이 없다), 그 위에 Vercel Functions의 요청
+> 본문 4.5MB가 플랜과 무관한 하드 리밋으로 있다. 요청받은 20MB 첨부는 서버
+> 경유로는 구조적으로 불가능하다.
+>
+> - `lib/attachmentPolicy.ts` — 서비스별(journal/memo/history/vendor) 버킷·
+>   개수·MIME·검증·`parseUploadedAttachments`. **클라이언트 번들에도 들어가므로
+>   node 전용 모듈을 import하면 안 된다.**
+> - `lib/attachmentUpload.ts` — `uploadAttachments()` + `useAttachmentUpload()` 훅
+> - `components/AttachmentPicker.tsx` — 누적 선택(여러 폴더)·드래그앤드롭·
+>   ✕ 제거·중복 건너뛰기·진행률
+> - 서버는 파일 바이트를 못 보므로 **실제 거부는 버킷의 `file_size_limit`/
+>   `allowed_mime_types`가 한다**(0081·0082, 네 버킷 모두 20MB). 네 버킷은 원래부터
+>   authenticated 전체에 insert/select/delete가 열려 있어(0005/0028/0042/0058)
+>   이 구조가 권한을 넓히지 않는다 — 오히려 그 권한에 제한이 처음 생겼다.
+> - 구글드라이브 업로드 분기는 이 경로에서 빠졌다(브라우저가 회사 드라이브
+>   자격증명을 가질 수 없다). 기존 `drive_file_id` 행은 그대로 열람·삭제된다.
+> - 제조사 서류만 예외: AI 추출이 바이트를 필요로 해서 서버가 Storage에서
+>   다시 `download()`한다(제품자료는 AI를 건너뛰므로 내려받지도 않는다).
+> - `lib/storageKey.ts`는 `node:crypto`가 아니라 Web Crypto를 쓴다(클라이언트
+>   번들 진입). Storage 키에 한글을 쓰면 `Invalid key`로 거부되는 문제는 여전하다.
+
+
 세 기능(`vendor_documents`, `work_journal_attachments`, `ad_strategy_memo_attachments`)의
 첨부파일은 원래 전부 Supabase Storage에 올라갔는데, Work Journal에 임시로 대량 업로드된
 파일 때문에 Storage 용량(무료 한도)이 초과돼(2026-09-02) 회사 공용 구글드라이브로
@@ -347,6 +374,22 @@ URL 발급이 필요한데 그마저도 새 첨부는 거의 다 드라이브를
 그렇게 남아 2026-10-04에 정리했다). 옛 디자인 화면
 `BusinessBoardV2.tsx`("menu backup" 그룹)에는 삭제 버튼을 넣지 않았다.
 
+**댓글 삭제(0084, 2026-10-04)**: 여섯 개 댓글 테이블(memo/meeting_note/
+ai_review + 세 보드)의 DELETE 정책이 셋으로 갈려 있던 것을 **작성자 본인 또는
+관리자**로 통일했다. Memo Board·Meeting Notes·AI Review에는 삭제 경로가 아예
+없어서 정책이 열려 있어도 드러나지 않았는데, 이때 삭제 UI
+(`components/CommentDeleteButton.tsx`)를 함께 만들었다. 세 보드의 기존 댓글
+삭제 액션에는 권한 확인이 없었다(RLS에만 의존) — **RLS에 막힌 delete는 에러
+없이 0행 처리**라 호출부가 성공으로 오해하므로 서버에서도 확인하도록 고쳤다.
+
+**다이얼로그 하단 버튼 고정(2026-10-11)**: `.dialog`는 `maxHeight: 92vh` +
+`overflow-y: auto`인데 `.dialog-actions`가 스크롤 영역 안쪽 맨 끝에 있어
+내용이 길면 저장·취소 버튼이 잘렸다. `position: sticky`로 바닥에 고정하고
+좌우·아래로 `.dialog` 패딩만큼 음수 마진을 줘 바가 폭을 꽉 채우게 했다
+(안 그러면 패딩 자리로 내용이 비쳐 지나간다). `.dialog-actions`를 쓰는 네
+다이얼로그(Calendar 일정, SI Business·Cooperation·Marketing 추가)가 CSS를
+공유하므로 한 번에 해결된다.
+
 ## Work Journal
 
 `/dashboard/work-journal` — Cooperation/Marketing과 같은 방식으로 Claude Design
@@ -448,6 +491,20 @@ URL 발급이 필요한데 그마저도 새 첨부는 거의 다 드라이브를
 - 일정의 나머지 필드(종료일시로 여러 날 걸치는 일정, 시간 유무, 담당자·참석자,
   장소·대상·내용)는 목업에 없던 것들이지만 실제 운영에 쓰이고 있어 그대로
   유지했다 — 다이얼로그에 전부 남아 있다.
+- ⚠️ **종료일시가 시작일시보다 빠르면 일정이 달력에서 통째로 사라진다** —
+  `eventsOnDay()`가 `day >= 시작 && day <= 종료`로 거르는데 둘이 뒤집히면 어떤
+  날짜도 통과하지 못한다. 사용자에겐 "등록이 안 된 것"으로 보여 같은 일정을 두 번
+  등록하게 된다(2026-10-02·10-12 실제 발생, 전체 412건 중 3건이 역전 상태였다).
+  2026-10-13에 세 겹으로 막았다: 종료 입력칸의 `min={시작}`, 서버 액션의
+  `dateRangeError()`(AI 입력창 등 폼을 안 거치는 경로 대비), 렌더링 시 뒤집힌
+  경우 하루짜리로 보고 시작일에 표시(이미 저장된 행을 감추지 않기 위해).
+- ⚠️ **구글 연결이 "해지된 것처럼" 보이는 경우**: 연결 행을 지우는 코드 경로는
+  "연결 해제" 버튼 하나뿐이다. 토큰 갱신 실패는 행을 지우지 않는다 — 예전에는
+  이때도 화면이 "연결됨"으로만 보여 구글 일정만 조용히 사라졌다. 2026-10-13부터
+  `invalid_grant`를 구분해 **"연결 만료됨" + 다시 연결 버튼**을 띄운다
+  (`resolveGoogleAccessToken`의 `authRevoked`). 근본 원인 후보: **OAuth 동의
+  화면이 "테스트" 상태면 refresh_token이 발급 7일 뒤 자동 만료된다** — Google
+  Cloud Console 게시 상태 확인 필요(미확인).
 - 상단에 SI Business 2/Cooperation/Marketing/Work Journal과 같은 "환경설정
   바"를 추가했다(2026-08-29) — "defaultView"(month/week/day)에 더해
   "showGoogleEventsDefault" 토글(완료·보류 토글과 같은 자리)도 저장한다
@@ -620,6 +677,39 @@ URL 발급이 필요한데 그마저도 새 첨부는 거의 다 드라이브를
   판단). 의견(댓글)은 `meeting_note_comments` 테이블로 Memo Board의 댓글
   (`ad_strategy_memo_comments`)과 완전히 같은 구조 — 삭제 UI는 없고, DELETE
   RLS 정책은 미팅노트 삭제 시 cascade가 막히지 않게 하려는 용도로만 있다.
+
+## 리멤버 명함
+
+`/dashboard/account/business-cards` — 헤더의 **개인 메뉴**(이름 클릭 → 회원정보
+수정·비밀번호 변경 옆)에 있다. 사이드바에 두지 않은 이유는 팀 공용 메뉴가
+아니기 때문(2026-10-12).
+
+리멤버 앱에서 내려받은 명함첩 CSV를 각자 올려 보관·검색한다. 실제 업로드분
+1,165건(정윤강)이 들어 있다.
+
+- **완전 개인 소유 데이터**(0086) — To-Do(0068)와 같은 권한 모델로
+  `owner_id = auth.uid()`만 허용하고 **admin 우회 정책이 없다**. 명함첩에는
+  외부인의 이름·휴대폰·이메일·주소가 들어 있어 팀 전체에 열 성격이 아니다
+  (사용자 요청: "각 멤버별로 각각 업로드해 관리"). 관리자도 남의 명함첩은 못 본다.
+- 컬럼은 리멤버 CSV 내보내기 헤더 13개를 1:1 대응시켰다(회사·이름·부서·직함·
+  전자 메일 주소·근무지 주소 번지·근무처 전화·근무처 팩스·휴대폰·명함 등록일·
+  명함첩 이름·그룹·메모). `메모`는 업로드분 전부 비어 있었지만 리멤버가
+  내보내는 칸이라 받아둔다.
+- **재업로드가 중복을 쌓지 않는다**: `dedup_key`(이름|회사|휴대폰, 공백·하이픈
+  제거·소문자) + `unique (owner_id, dedup_key)`로 upsert한다. 리멤버에서 갱신된
+  파일을 다시 받아 올리는 게 자연스러운 사용법이라 이쪽을 택했다 — 대가로
+  **같은 사람의 명함 두 장은 합쳐진다**(업로드분에 실제로 1건 있어 1,166 → 1,165).
+- CSV는 **브라우저에서 파싱**해(`lib/businessCardCsv.ts`, 외부 의존성 없는
+  RFC4180 최소 구현 — 따옴표 안 쉼표·줄바꿈, `""`, BOM, CRLF) 해석된 행만
+  300건씩 서버 액션에 보낸다. 열은 순서가 아니라 **헤더 이름**으로 찾는다.
+  `IMPORT_CHUNK_SIZE`가 액션 파일이 아니라 csv 모듈에 있는 이유: `"use server"`
+  파일은 async 함수만 export할 수 있어 상수를 두면 Turbopack이 빌드를 거부한다.
+- 화면은 리멤버 웹 레이아웃을 따른다 — 상단 검색창, 왼쪽 그룹 레일(건수 표시,
+  미분류 포함), 오른쪽 등록일별 묶음, **50건 페이징**. 모바일에서는 그룹 레일이
+  가로 스크롤 칩이 되고 명함 한 줄이 카드로 서며 페이지 번호는 5개만 보인다
+  (`industryTheme.css`의 `.bc-*` 규칙).
+- ⚠️ 명함첩 CSV는 `.gitignore`에 패턴으로 막아뒀다 — 개인정보 파일이 저장소
+  이력에 들어가면 지우기 어렵다.
 
 ## 할 일 (Todos)
 
