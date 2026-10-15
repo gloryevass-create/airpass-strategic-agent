@@ -22,6 +22,12 @@ const PUBLIC_PATHS = [
   // 세션 체크를 건너뛴다(라우트 자체의 토큰 검증이 진짜 인증,
   // app/api/calendar-feed/route.ts, 2026-09-13).
   "/api/calendar-feed",
+  // Google OAuth 동의 화면 "브랜딩"에 등록하는 홈페이지·개인정보처리방침·서비스
+  // 약관 — Google 검토자와 동의 화면을 보는 사람이 로그인 없이 열 수 있어야 한다
+  // (앱 게시 상태 전환, 2026-10-15).
+  "/about",
+  "/privacy",
+  "/terms",
 ];
 
 function isPublicPath(pathname: string) {
